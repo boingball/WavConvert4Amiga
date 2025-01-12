@@ -56,9 +56,9 @@
             // 
             this.panel1.AllowDrop = true;
             this.panel1.Controls.Add(this.label2);
-            this.panel1.Location = new System.Drawing.Point(1140, 625);
+            this.panel1.Location = new System.Drawing.Point(1140, 657);
             this.panel1.Name = "panel1";
-            this.panel1.Size = new System.Drawing.Size(538, 408);
+            this.panel1.Size = new System.Drawing.Size(538, 376);
             this.panel1.TabIndex = 2;
             this.panel1.DragDrop += new System.Windows.Forms.DragEventHandler(this.panel1_DragDrop);
             this.panel1.DragEnter += new System.Windows.Forms.DragEventHandler(this.panel1_DragEnter);
@@ -78,7 +78,7 @@
             // 
             this.listBoxFiles.FormattingEnabled = true;
             this.listBoxFiles.ItemHeight = 20;
-            this.listBoxFiles.Location = new System.Drawing.Point(26, 611);
+            this.listBoxFiles.Location = new System.Drawing.Point(25, 657);
             this.listBoxFiles.Name = "listBoxFiles";
             this.listBoxFiles.Size = new System.Drawing.Size(1069, 124);
             this.listBoxFiles.TabIndex = 4;
@@ -96,7 +96,7 @@
             // 
             this.checkBoxEnable8SVX.AutoSize = true;
             this.checkBoxEnable8SVX.BackColor = System.Drawing.Color.Transparent;
-            this.checkBoxEnable8SVX.Location = new System.Drawing.Point(1183, 17);
+            this.checkBoxEnable8SVX.Location = new System.Drawing.Point(246, 59);
             this.checkBoxEnable8SVX.Name = "checkBoxEnable8SVX";
             this.checkBoxEnable8SVX.Size = new System.Drawing.Size(77, 24);
             this.checkBoxEnable8SVX.TabIndex = 5;
@@ -106,7 +106,7 @@
             // checkBoxMoveOriginal
             // 
             this.checkBoxMoveOriginal.AutoSize = true;
-            this.checkBoxMoveOriginal.Location = new System.Drawing.Point(1548, 17);
+            this.checkBoxMoveOriginal.Location = new System.Drawing.Point(1153, 63);
             this.checkBoxMoveOriginal.Name = "checkBoxMoveOriginal";
             this.checkBoxMoveOriginal.Size = new System.Drawing.Size(159, 24);
             this.checkBoxMoveOriginal.TabIndex = 6;
@@ -115,10 +115,10 @@
             // 
             // panelWaveform
             // 
-            this.panelWaveform.Location = new System.Drawing.Point(26, 49);
+            this.panelWaveform.Location = new System.Drawing.Point(25, 95);
             this.panelWaveform.Margin = new System.Windows.Forms.Padding(4, 5, 4, 5);
             this.panelWaveform.Name = "panelWaveform";
-            this.panelWaveform.Size = new System.Drawing.Size(1667, 554);
+            this.panelWaveform.Size = new System.Drawing.Size(1653, 554);
             this.panelWaveform.TabIndex = 8;
             this.panelWaveform.Visible = false;
             // 
@@ -126,7 +126,7 @@
             // 
             this.checkBoxLowPass.AutoSize = true;
             this.checkBoxLowPass.BackColor = System.Drawing.Color.Transparent;
-            this.checkBoxLowPass.Location = new System.Drawing.Point(1266, 17);
+            this.checkBoxLowPass.Location = new System.Drawing.Point(764, 14);
             this.checkBoxLowPass.Name = "checkBoxLowPass";
             this.checkBoxLowPass.Size = new System.Drawing.Size(142, 24);
             this.checkBoxLowPass.TabIndex = 9;
@@ -137,7 +137,7 @@
             // 
             this.checkBoxAutoConvert.AutoSize = true;
             this.checkBoxAutoConvert.BackColor = System.Drawing.Color.Transparent;
-            this.checkBoxAutoConvert.Location = new System.Drawing.Point(1414, 17);
+            this.checkBoxAutoConvert.Location = new System.Drawing.Point(1019, 63);
             this.checkBoxAutoConvert.Name = "checkBoxAutoConvert";
             this.checkBoxAutoConvert.Size = new System.Drawing.Size(128, 24);
             this.checkBoxAutoConvert.TabIndex = 10;
@@ -146,7 +146,7 @@
             // 
             // btnManualConvert
             // 
-            this.btnManualConvert.Location = new System.Drawing.Point(898, 7);
+            this.btnManualConvert.Location = new System.Drawing.Point(25, 53);
             this.btnManualConvert.Name = "btnManualConvert";
             this.btnManualConvert.Size = new System.Drawing.Size(215, 34);
             this.btnManualConvert.TabIndex = 11;
@@ -156,9 +156,9 @@
             // 
             // panelBottom
             // 
-            this.panelBottom.Location = new System.Drawing.Point(26, 745);
+            this.panelBottom.Location = new System.Drawing.Point(26, 787);
             this.panelBottom.Name = "panelBottom";
-            this.panelBottom.Size = new System.Drawing.Size(962, 298);
+            this.panelBottom.Size = new System.Drawing.Size(962, 256);
             this.panelBottom.TabIndex = 12;
             // 
             // MainForm
@@ -171,15 +171,15 @@
             this.ClientSize = new System.Drawing.Size(1719, 1055);
             this.Controls.Add(this.panelBottom);
             this.Controls.Add(this.btnManualConvert);
-            this.Controls.Add(this.checkBoxAutoConvert);
-            this.Controls.Add(this.checkBoxLowPass);
             this.Controls.Add(this.panelWaveform);
             this.Controls.Add(this.listBoxFiles);
-            this.Controls.Add(this.checkBoxMoveOriginal);
-            this.Controls.Add(this.checkBoxEnable8SVX);
             this.Controls.Add(this.comboBoxSampleRate);
             this.Controls.Add(this.label1);
             this.Controls.Add(this.panel1);
+            this.Controls.Add(this.checkBoxMoveOriginal);
+            this.Controls.Add(this.checkBoxAutoConvert);
+            this.Controls.Add(this.checkBoxLowPass);
+            this.Controls.Add(this.checkBoxEnable8SVX);
             this.DoubleBuffered = true;
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedSingle;
             this.Name = "MainForm";

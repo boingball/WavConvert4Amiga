@@ -27,6 +27,7 @@ namespace WavConvert4Amiga
         private SystemAudioRecorder audioRecorder;
         private WaveformProcessor waveformProcessor;
         private RecordedAudioData recordedAudioData;
+        private RecordingIndicator recordingIndicator;
         private ComboBox comboBoxPTNote;
         private CheckBox checkBoxNTSC;
         private WaveOut waveOut;
@@ -89,6 +90,7 @@ namespace WavConvert4Amiga
             // Create the checkerboard background
             waveformProcessor = new WaveformProcessor();
             CreateCheckerboardBackground();
+            InitializeRecordingIndicator();
             // First create all controls
             // Initialize UI
             InitializeWaveformControls();
@@ -282,6 +284,16 @@ namespace WavConvert4Amiga
                 MessageBox.Show($"Failed to load cursors: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 this.Cursor = Cursors.Default;
             }
+        }
+        private void InitializeRecordingIndicator()
+        {
+            recordingIndicator = new RecordingIndicator();
+            recordingIndicator.Size = new Size(200, 40);
+            recordingIndicator.Location = new Point(this.Width - 220, 10);
+            recordingIndicator.Visible = false;
+            recordingIndicator.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            recordingIndicator.BringToFront(); // Make sure it's on top
+            this.Controls.Add(recordingIndicator);
         }
 
         private void SetCustomCursor(string cursorType)
@@ -726,6 +738,17 @@ namespace WavConvert4Amiga
                     btnRecordSystemSound.Enabled = false;
                     btnRecordMicrophone.Enabled = false;
                     btnStopRecording.Enabled = true;
+
+                    // Show and start recording indicator
+                    recordingIndicator.RecordingType = "system";
+                    recordingIndicator.Visible = true;
+                    recordingIndicator.StartBlinking();
+
+
+                    // Update UI state
+                    btnRecordSystemSound.Enabled = false;
+                    btnRecordMicrophone.Enabled = false;
+                    btnStopRecording.Enabled = true;
                 }
                 catch (Exception ex)
                 {
@@ -751,6 +774,16 @@ namespace WavConvert4Amiga
                     audioRecorder.StartRecordingMicrophone(sampleRate);
                     AddToListBox($"Recording microphone at {sampleRate} Hz...");
                     isRecorded = true;
+
+                    // Update UI state
+                    btnRecordSystemSound.Enabled = false;
+                    btnRecordMicrophone.Enabled = false;
+                    btnStopRecording.Enabled = true;
+
+                    // Show and start recording indicator
+                    recordingIndicator.RecordingType = "microphone";
+                    recordingIndicator.Visible = true;
+                    recordingIndicator.StartBlinking();
 
                     // Update UI state
                     btnRecordSystemSound.Enabled = false;
@@ -782,10 +815,14 @@ namespace WavConvert4Amiga
 
                  await audioRecorder.StopRecording();
 
-             if (audioRecorder.RecordedData != null)
+                    // Stop and hide recording indicator
+                    recordingIndicator.StopBlinking();
+                    recordingIndicator.Visible = false;
+
+                    if (audioRecorder.RecordedData != null)
                     {
-            currentPcmData = audioRecorder.RecordedData;
-            originalPcmData = new byte[currentPcmData.Length];
+                         currentPcmData = audioRecorder.RecordedData;
+                         originalPcmData = new byte[currentPcmData.Length];
                         Debug.WriteLine($"Updating currentPcmData. Source length: {currentPcmData.Length}");
                         Array.Copy(currentPcmData, originalPcmData, currentPcmData.Length);
 
