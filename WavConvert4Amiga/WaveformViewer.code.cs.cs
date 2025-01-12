@@ -18,6 +18,10 @@ namespace WavConvert4Amiga
         private Color waveformColor = Color.DodgerBlue;
         private Color backgroundColor = Color.Black;
         private Color loopMarkerColor = Color.Red;
+        private Color playheadColor = Color.FromArgb(144, 238, 144); // Light green color
+        private int currentPlayPosition = -1; // Current playback position
+        private Timer playheadTimer;
+
         public event EventHandler<(int start, int end)> LoopPointsChanged;
         private bool isDraggingEnd = false;
         private const int DRAG_THRESHOLD = 5;
@@ -35,7 +39,82 @@ namespace WavConvert4Amiga
             this.MouseDown += WaveformViewer_MouseDown;
             this.MouseMove += WaveformViewer_MouseMove;
             this.MouseUp += WaveformViewer_MouseUp;
+
+            // Initialize playhead timer
+            playheadTimer = new Timer();
+            playheadTimer.Interval = 16; // ~60 FPS update rate
+            playheadTimer.Tick += PlayheadTimer_Tick;
         }
+
+        // Add method to update playhead position
+        public void UpdatePlayPosition(int samplePosition)
+        {
+            if (currentPlayPosition != samplePosition)
+            {
+                currentPlayPosition = samplePosition;
+                this.Invalidate(); // Trigger redraw
+            }
+        }
+
+        // Start playhead animation
+        public void StartPlayheadAnimation()
+        {
+            playheadTimer.Start();
+        }
+
+        // Stop playhead animation
+        public void StopPlayheadAnimation()
+        {
+            playheadTimer.Stop();
+            currentPlayPosition = -1;
+            this.Invalidate();
+        }
+
+        private DateTime playbackStartTime;
+        private int sampleRate = 8000; // Default sample rate
+
+        public void SetSampleRate(int rate)
+        {
+            sampleRate = rate;
+        }
+
+        private void PlayheadTimer_Tick(object sender, EventArgs e)
+        {
+            if (currentPlayPosition >= 0)
+            {
+                // Calculate elapsed time since playback started
+                TimeSpan elapsed = DateTime.Now - playbackStartTime;
+
+                // Calculate sample position based on time and sample rate
+                int samplesElapsed = (int)(elapsed.TotalSeconds * sampleRate);
+
+                if (loopStart >= 0 && loopEnd >= 0)
+                {
+                    // Loop mode
+                    int loopLength = loopEnd - loopStart;
+                    int loopedPosition = samplesElapsed % loopLength;
+                    currentPlayPosition = loopStart + loopedPosition;
+                }
+                else
+                {
+                    // Full file preview mode
+                    currentPlayPosition = samplesElapsed;
+                    if (audioData != null && currentPlayPosition >= audioData.Length)
+                    {
+                        StopPlayheadAnimation();
+                        return;
+                    }
+                }
+                this.Invalidate();
+            }
+        }
+
+        public void StartPlayback()
+        {
+            playbackStartTime = DateTime.Now;
+            playheadTimer.Start();
+        }
+
 
         public void SetAudioData(byte[] data)
         {
@@ -152,7 +231,7 @@ namespace WavConvert4Amiga
 
             int centerY = (int)(this.Height * 0.55);//Move to 55% from top
             float yScale = (Height / 2) / 128f;
-
+            // Draw waveform
             using (var pen = new Pen(Color.Blue))
             {
                 // Calculate visible portion based on zoom
@@ -188,8 +267,8 @@ namespace WavConvert4Amiga
 
                     e.Graphics.DrawLine(pen, x, minY, x, maxY);
                 }
-            }
 
+            }
             // Draw loop points
             if (loopStart >= 0)
             {
@@ -205,6 +284,16 @@ namespace WavConvert4Amiga
                 using (var pen = new Pen(Color.Red, 2))
                 {
                     int x = (int)((long)loopEnd * Width / (audioData.Length / zoomFactor));
+                    e.Graphics.DrawLine(pen, x, 0, x, Height);
+                }
+            }
+
+            // Draw playhead
+            if (currentPlayPosition >= 0)
+            {
+                using (var pen = new Pen(playheadColor, 2))
+                {
+                    int x = (int)((long)currentPlayPosition * Width / (audioData.Length / zoomFactor));
                     e.Graphics.DrawLine(pen, x, 0, x, Height);
                 }
             }

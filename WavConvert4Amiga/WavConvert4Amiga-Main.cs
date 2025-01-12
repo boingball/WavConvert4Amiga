@@ -1132,6 +1132,22 @@ namespace WavConvert4Amiga
                 currentPreviewEnd = end;
                 waveOut.Play();
 
+                // Start playhead animation with correct sample rate
+                waveformViewer.SetSampleRate(targetSampleRate);
+                waveformViewer.UpdatePlayPosition(start);
+                waveformViewer.StartPlayback();
+
+                // Get current loop points
+                var (loopStart, loopEnd) = waveformViewer.GetLoopPoints();
+
+                // If no loop points are set, configure playback for full file preview
+                if (loopStart < 0 || loopEnd < 0)
+                {
+                    currentPreviewStart = 0;
+                    currentPreviewEnd = currentPcmData.Length;
+                }
+
+
                 btnPreviewLoop.Text = "Stop";
             }
             catch (Exception ex)
@@ -1173,6 +1189,9 @@ namespace WavConvert4Amiga
                 }
                 catch (Exception) { }
             }
+
+            // Stop playhead animation
+            waveformViewer?.StopPlayheadAnimation();
 
             isPlaying = false;
             btnPreviewLoop.Text = "Preview";
@@ -1285,39 +1304,67 @@ namespace WavConvert4Amiga
         } // Add this method to apply amplification to audio data
         private byte[] AmplifyAndConvert(byte[] pcmData, float amplificationFactor)
         {
-            // Get target sample rate from combo box
-            string selectedSampleRate = comboBoxSampleRate.Text;
-            string sampleRateString = new string(selectedSampleRate.TakeWhile(char.IsDigit).ToArray());
-            int targetSampleRate = int.TryParse(sampleRateString, out int rate) ? rate : originalSampleRate;
+            if (pcmData == null || pcmData.Length == 0) return pcmData;
 
-            // Define the target format (e.g., 8-bit, mono)
-            var targetFormat = new WaveFormat(targetSampleRate, 8, 1);
-
-            using (var inputStream = new MemoryStream(pcmData))
-            using (var reader = new RawSourceWaveStream(inputStream, originalFormat))
-            using (var conversionStream = new WaveFormatConversionStream(targetFormat, reader))
-            using (var outputStream = new MemoryStream())
+            try
             {
-                // Use a fixed buffer size for processing
-                const int bufferSize = 4096;
-                var buffer = new byte[bufferSize];
-                int bytesRead;
+                // Get target sample rate from combo box
+                string selectedSampleRate = comboBoxSampleRate.Text;
+                string sampleRateString = new string(selectedSampleRate.TakeWhile(char.IsDigit).ToArray());
+                int targetSampleRate = int.TryParse(sampleRateString, out int rate) ? rate : originalSampleRate;
 
-                while ((bytesRead = conversionStream.Read(buffer, 0, buffer.Length)) > 0)
+                // Create resampled data first using MediaFoundationResampler
+                byte[] resampledData;
+                using (var sourceMs = new MemoryStream())
                 {
-                    // Amplify the audio data
-                    for (int i = 0; i < bytesRead; i++)
+                    using (var writer = new WaveFileWriter(sourceMs, originalFormat))
                     {
-                        // Amplify and clamp for 8-bit unsigned PCM
-                        int amplifiedSample = buffer[i] - 128; // Convert to signed range (-128 to 127)
-                        amplifiedSample = (int)(amplifiedSample * amplificationFactor);
-                        buffer[i] = Clamp((byte)(amplifiedSample + 128), 0, 255); // Convert back to unsigned range (0 to 255)
-                    }
+                        writer.Write(pcmData, 0, pcmData.Length);
+                        writer.Flush();
+                        sourceMs.Position = 0;
 
-                    outputStream.Write(buffer, 0, bytesRead);
+                        using (var reader = new WaveFileReader(sourceMs))
+                        using (var resampler = new MediaFoundationResampler(reader, new WaveFormat(targetSampleRate, 8, 1)))
+                        {
+                            resampler.ResamplerQuality = 60;
+                            using (var outStream = new MemoryStream())
+                            {
+                                byte[] buffer = new byte[4096];
+                                int read;
+                                while ((read = resampler.Read(buffer, 0, buffer.Length)) > 0)
+                                {
+                                    outStream.Write(buffer, 0, read);
+                                }
+                                resampledData = outStream.ToArray();
+                            }
+                        }
+                    }
                 }
 
-                return outputStream.ToArray();
+                // Now apply amplification to the resampled data
+                byte[] amplifiedData = new byte[resampledData.Length];
+                for (int i = 0; i < resampledData.Length; i++)
+                {
+                    // Convert to signed range (-128 to 127)
+                    float sample = (resampledData[i] - 128);
+
+                    // Apply amplification
+                    sample *= amplificationFactor;
+
+                    // Clamp the values
+                    sample = Math.Max(-128, Math.Min(127, sample));
+
+                    // Convert back to unsigned range (0 to 255)
+                    amplifiedData[i] = (byte)(sample + 128);
+                }
+
+                return amplifiedData;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error in AmplifyAndConvert: {ex.Message}");
+                // Return original data if there's an error
+                return pcmData;
             }
         }
 
