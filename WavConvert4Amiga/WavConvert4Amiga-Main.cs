@@ -718,12 +718,21 @@ namespace WavConvert4Amiga
         {
             audioRecorder = new SystemAudioRecorder();
 
+            // Create a panel for the recording controls
+            Panel recordingPanel = new Panel
+            {
+                Location = new Point(10, 10),
+                Size = new Size(325, 100),
+                BackColor = Color.FromArgb(180, 190, 210)
+            };
+            AddBevelToPanel(recordingPanel);
+
             // Record System Sound button
             btnRecordSystemSound = new RetroButton
             {
                 Text = "Record System",
                 Size = new Size(150, 30),
-                Location = new Point(10, panelBottom.Height - 100)
+                Location = new Point(10, 10)
             };
             btnRecordSystemSound.Click += (s, e) =>
             {
@@ -743,12 +752,6 @@ namespace WavConvert4Amiga
                     recordingIndicator.RecordingType = "system";
                     recordingIndicator.Visible = true;
                     recordingIndicator.StartBlinking();
-
-
-                    // Update UI state
-                    btnRecordSystemSound.Enabled = false;
-                    btnRecordMicrophone.Enabled = false;
-                    btnStopRecording.Enabled = true;
                 }
                 catch (Exception ex)
                 {
@@ -757,14 +760,14 @@ namespace WavConvert4Amiga
                 }
             };
 
-            panelBottom.Controls.Add(btnRecordSystemSound);
+            recordingPanel.Controls.Add(btnRecordSystemSound);
 
             // Record Microphone button
             btnRecordMicrophone = new RetroButton
             {
                 Text = "Record Mic",
                 Size = new Size(150, 30),
-                Location = new Point(170, panelBottom.Height - 100)
+                Location = new Point(170, 10)
             };
             btnRecordMicrophone.Click += (s, e) =>
             {
@@ -784,11 +787,6 @@ namespace WavConvert4Amiga
                     recordingIndicator.RecordingType = "microphone";
                     recordingIndicator.Visible = true;
                     recordingIndicator.StartBlinking();
-
-                    // Update UI state
-                    btnRecordSystemSound.Enabled = false;
-                    btnRecordMicrophone.Enabled = false;
-                    btnStopRecording.Enabled = true;
                 }
                 catch (Exception ex)
                 {
@@ -796,24 +794,24 @@ namespace WavConvert4Amiga
                         MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             };
-            panelBottom.Controls.Add(btnRecordMicrophone);
+            recordingPanel.Controls.Add(btnRecordMicrophone);
 
             // Stop Recording button
             btnStopRecording = new RetroButton
             {
                 Text = "Stop Recording",
                 Size = new Size(150, 30),
-                Location = new Point(330, panelBottom.Height - 100),
+                Location = new Point(10, 50),
                 Enabled = false
             };
             btnStopRecording.Click += async (s, e) =>
             {
                 try
-             {
-                 btnStopRecording.Enabled = false;
-                  AddToListBox("Stopping recording...");
+                {
+                    btnStopRecording.Enabled = false;
+                    AddToListBox("Stopping recording...");
 
-                 await audioRecorder.StopRecording();
+                    await audioRecorder.StopRecording();
 
                     // Stop and hide recording indicator
                     recordingIndicator.StopBlinking();
@@ -821,27 +819,22 @@ namespace WavConvert4Amiga
 
                     if (audioRecorder.RecordedData != null)
                     {
-                         currentPcmData = audioRecorder.RecordedData;
-                         originalPcmData = new byte[currentPcmData.Length];
+                        currentPcmData = audioRecorder.RecordedData;
+                        originalPcmData = new byte[currentPcmData.Length];
                         Debug.WriteLine($"Updating currentPcmData. Source length: {currentPcmData.Length}");
                         Array.Copy(currentPcmData, originalPcmData, currentPcmData.Length);
 
-            // Store the original format
-            originalFormat = audioRecorder.CapturedFormat;
+                        // Store the original format
+                        originalFormat = audioRecorder.CapturedFormat;
 
-            // Create proper WaveFormat for recorded data if needed
-            if (originalFormat == null)
-            {
-                string selectedSampleRate = comboBoxSampleRate.Text;
-                string sampleRateString = new string(selectedSampleRate.TakeWhile(char.IsDigit).ToArray());
-                int sampleRate = int.TryParse(sampleRateString, out int rate) ? rate : 44100;
-                originalFormat = new WaveFormat(sampleRate, 16, 1);
-            }
-
-            // Update display
-          // waveformViewer.Clear();
-          // waveformViewer.SetAudioData(currentPcmData);
-         //  ProcessWithCurrentSampleRate();
+                        // Create proper WaveFormat for recorded data if needed
+                        if (originalFormat == null)
+                        {
+                            string selectedSampleRate = comboBoxSampleRate.Text;
+                            string sampleRateString = new string(selectedSampleRate.TakeWhile(char.IsDigit).ToArray());
+                            int sampleRate = int.TryParse(sampleRateString, out int rate) ? rate : 44100;
+                            originalFormat = new WaveFormat(sampleRate, 16, 1);
+                        }
 
                         this.Invoke(new Action(() =>
                         {
@@ -851,29 +844,31 @@ namespace WavConvert4Amiga
                         }));
 
                         AddToListBox($"Recorded {currentPcmData.Length} bytes of audio data");
-        }
-        else
-        {
-            AddToListBox("No valid data recorded");
-            isRecorded = false;
-        }
-    }
-    catch (Exception ex)
-    {
-        AddToListBox($"Error stopping recording: {ex.Message}");
-        MessageBox.Show($"Error stopping recording: {ex.Message}", "Recording Error",
-            MessageBoxButtons.OK, MessageBoxIcon.Error);
-        isRecorded = false;
-    }
-    finally
-    {
-        btnRecordSystemSound.Enabled = true;
-        btnRecordMicrophone.Enabled = true;
-        btnStopRecording.Enabled = false;
-
+                    }
+                    else
+                    {
+                        AddToListBox("No valid data recorded");
+                        isRecorded = false;
+                    }
                 }
-};
-            panelBottom.Controls.Add(btnStopRecording);
+                catch (Exception ex)
+                {
+                    AddToListBox($"Error stopping recording: {ex.Message}");
+                    MessageBox.Show($"Error stopping recording: {ex.Message}", "Recording Error",
+                        MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    isRecorded = false;
+                }
+                finally
+                {
+                    btnRecordSystemSound.Enabled = true;
+                    btnRecordMicrophone.Enabled = true;
+                    btnStopRecording.Enabled = false;
+                }
+            };
+            recordingPanel.Controls.Add(btnStopRecording);
+
+            // Add the recording panel to the bottom panel
+            panelBottom.Controls.Add(recordingPanel);
         }
         private void PushUndo(byte[] data)
         {
@@ -1417,7 +1412,6 @@ namespace WavConvert4Amiga
             buttonY += 40;
             CreateEffectButton("Echo Effect", new Point(10, buttonY), effectsPanel, ApplyEchoEffect);
             CreateEffectButton("Reset Effects", new Point(150, buttonY), effectsPanel, ResetEffects);
-
             panelBottom.Controls.Add(effectsPanel);
         }
 
@@ -1434,139 +1428,86 @@ namespace WavConvert4Amiga
         }
 
         // Effect handlers
-        private void ApplyUnderwaterEffect(object sender, EventArgs e)
+        private void ApplyEffect(Func<byte[], int, byte[]> effectFunction, string effectName)
         {
             if (currentPcmData == null) return;
-            AddToListBox("Applying underwater effect...");
+            AddToListBox($"Applying {effectName}...");
 
             try
             {
+                // Store playback state
+                bool wasPlaying = isPlaying;
+                var (loopStart, loopEnd) = waveformViewer.GetLoopPoints();
+
+                // Stop playback temporarily
+                if (wasPlaying)
+                {
+                    StopPreview();
+                }
+
                 // Create a copy of current data for undo
                 byte[] prevData = new byte[currentPcmData.Length];
                 Array.Copy(currentPcmData, prevData, currentPcmData.Length);
                 PushUndo(prevData);
 
                 // Apply effect
-                currentPcmData = audioEffects.ApplyUnderwaterEffect(currentPcmData, GetSelectedSampleRate());
+                currentPcmData = effectFunction(currentPcmData, GetSelectedSampleRate());
                 waveformViewer.SetAudioData(currentPcmData);
 
                 // Clear redo stack and update UI
                 redoStack.Clear();
                 UpdateEditButtonStates();
-                AddToListBox("Underwater effect applied");
+
+                // Restore loop points if they existed
+                if (loopStart >= 0 && loopEnd >= 0)
+                {
+                    waveformViewer.RestoreLoopPoints(loopStart, loopEnd);
+                }
+
+                // Restore playback if it was playing
+                if (wasPlaying)
+                {
+                    if (loopStart >= 0 && loopEnd >= 0)
+                    {
+                        StartPreview(loopStart, loopEnd);
+                    }
+                    else
+                    {
+                        StartPreview(0, currentPcmData.Length);
+                    }
+                }
+
+                AddToListBox($"{effectName} applied");
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Error applying effect: {ex.Message}", "Effect Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        private void ApplyUnderwaterEffect(object sender, EventArgs e)
+        {
+            ApplyEffect(audioEffects.ApplyUnderwaterEffect, "underwater effect");
         }
 
         private void ApplyRobotEffect(object sender, EventArgs e)
         {
-            if (currentPcmData == null) return;
-            AddToListBox("Applying robot voice effect...");
-
-            try
-            {
-                // Create a copy of current data for undo
-                byte[] prevData = new byte[currentPcmData.Length];
-                Array.Copy(currentPcmData, prevData, currentPcmData.Length);
-                PushUndo(prevData);
-
-                // Apply effect
-                currentPcmData = audioEffects.ApplyRobotEffect(currentPcmData, GetSelectedSampleRate());
-                waveformViewer.SetAudioData(currentPcmData);
-
-                // Clear redo stack and update UI
-                redoStack.Clear();
-                UpdateEditButtonStates();
-                AddToListBox("Robot voice effect applied");
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error applying effect: {ex.Message}", "Effect Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
+            ApplyEffect(audioEffects.ApplyRobotEffect, "robot voice effect");
         }
 
         private void ApplyHighPitchEffect(object sender, EventArgs e)
         {
-            if (currentPcmData == null) return;
-            AddToListBox("Applying high pitch effect...");
-
-            try
-            {
-                // Create a copy of current data for undo
-                byte[] prevData = new byte[currentPcmData.Length];
-                Array.Copy(currentPcmData, prevData, currentPcmData.Length);
-                PushUndo(prevData);
-
-                // Apply effect
-                currentPcmData = audioEffects.ApplyPitchShift(currentPcmData, GetSelectedSampleRate(), 1.5f);
-                waveformViewer.SetAudioData(currentPcmData);
-
-                // Clear redo stack and update UI
-                redoStack.Clear();
-                UpdateEditButtonStates();
-                AddToListBox("High pitch effect applied");
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error applying effect: {ex.Message}", "Effect Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
+            ApplyEffect((data, rate) => audioEffects.ApplyPitchShift(data, rate, 1.5f), "high pitch effect");
         }
 
         private void ApplyLowPitchEffect(object sender, EventArgs e)
         {
-            if (currentPcmData == null) return;
-            AddToListBox("Applying low pitch effect...");
-
-            try
-            {
-                // Create a copy of current data for undo
-                byte[] prevData = new byte[currentPcmData.Length];
-                Array.Copy(currentPcmData, prevData, currentPcmData.Length);
-                PushUndo(prevData);
-
-                // Apply effect
-                currentPcmData = audioEffects.ApplyPitchShift(currentPcmData, GetSelectedSampleRate(), 0.75f);
-                waveformViewer.SetAudioData(currentPcmData);
-
-                // Clear redo stack and update UI
-                redoStack.Clear();
-                UpdateEditButtonStates();
-                AddToListBox("Low pitch effect applied");
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error applying effect: {ex.Message}", "Effect Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
+            ApplyEffect((data, rate) => audioEffects.ApplyPitchShift(data, rate, 0.75f), "low pitch effect");
         }
 
         private void ApplyEchoEffect(object sender, EventArgs e)
         {
-            if (currentPcmData == null) return;
-            AddToListBox("Applying echo effect...");
-
-            try
-            {
-                // Create a copy of current data for undo
-                byte[] prevData = new byte[currentPcmData.Length];
-                Array.Copy(currentPcmData, prevData, currentPcmData.Length);
-                PushUndo(prevData);
-
-                // Apply effect
-                currentPcmData = audioEffects.ApplyEchoEffect(currentPcmData, GetSelectedSampleRate());
-                waveformViewer.SetAudioData(currentPcmData);
-
-                // Clear redo stack and update UI
-                redoStack.Clear();
-                UpdateEditButtonStates();
-                AddToListBox("Echo effect applied");
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error applying effect: {ex.Message}", "Effect Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
+            ApplyEffect(audioEffects.ApplyEchoEffect, "echo effect");
         }
 
         private void ResetEffects(object sender, EventArgs e)
@@ -1576,10 +1517,49 @@ namespace WavConvert4Amiga
 
             try
             {
-                PushUndo(currentPcmData);
+                // Store playback state
+                bool wasPlaying = isPlaying;
+                var (loopStart, loopEnd) = waveformViewer.GetLoopPoints();
+
+                // Stop playback temporarily
+                if (wasPlaying)
+                {
+                    StopPreview();
+                }
+
+                // Create undo point
+                byte[] prevData = new byte[currentPcmData.Length];
+                Array.Copy(currentPcmData, prevData, currentPcmData.Length);
+                PushUndo(prevData);
+
+                // Reset to original
                 currentPcmData = new byte[originalPcmData.Length];
                 Array.Copy(originalPcmData, currentPcmData, originalPcmData.Length);
                 ProcessWithCurrentSampleRate();
+
+                // Clear redo stack and update UI
+                redoStack.Clear();
+                UpdateEditButtonStates();
+
+                // Restore loop points if they existed
+                if (loopStart >= 0 && loopEnd >= 0)
+                {
+                    waveformViewer.RestoreLoopPoints(loopStart, loopEnd);
+                }
+
+                // Restore playback if it was playing
+                if (wasPlaying)
+                {
+                    if (loopStart >= 0 && loopEnd >= 0)
+                    {
+                        StartPreview(loopStart, loopEnd);
+                    }
+                    else
+                    {
+                        StartPreview(0, currentPcmData.Length);
+                    }
+                }
+
                 AddToListBox("Effects reset to original");
             }
             catch (Exception ex)
@@ -1587,6 +1567,8 @@ namespace WavConvert4Amiga
                 MessageBox.Show($"Error resetting effects: {ex.Message}", "Reset Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
+
+       
         private void ProcessSampleRateChange()
         {
             // Stop any current playback
