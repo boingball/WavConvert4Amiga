@@ -1003,17 +1003,33 @@ namespace WavConvert4Amiga
 
         private void OnLoopPointsChanged(object sender, (int start, int end) loopPoints)
         {
-            if (isPlaying)
+            // If loop points were cleared, stop playback
+            if (loopPoints.start < 0 || loopPoints.end < 0)
             {
-                // Update the preview with new loop points while maintaining playback
-                UpdatePreviewLoopPoints(loopPoints.start, loopPoints.end);
+                StopPreview();
             }
+            // If both points are set and valid
+            else if (loopPoints.start < loopPoints.end)
+            {
+                if (isPlaying)
+                {
+                    // Update existing preview if already playing
+                    UpdatePreviewLoopPoints(loopPoints.start, loopPoints.end);
+                }
+                else
+                {
+                    // Auto-start preview for new loop points
+                    StartPreview(loopPoints.start, loopPoints.end);
+                }
+            }
+
             // Enable/disable cut button based on loop point validity
             btnCut.Enabled = currentPcmData != null &&
                              loopPoints.start >= 0 &&
                              loopPoints.end >= 0 &&
                              loopPoints.start < loopPoints.end;
         }
+
 
         private void UpdatePreviewLoopPoints(int start, int end)
         {
@@ -1024,16 +1040,16 @@ namespace WavConvert4Amiga
                     return;
                 }
 
-                // Extract the new section to play
-                byte[] sectionToPlay = new byte[end - start];
-                Array.Copy(currentPcmData, start, sectionToPlay, 0, end - start);
-
                 string selectedSampleRate = comboBoxSampleRate.Text;
                 string sampleRateString = new string(selectedSampleRate.TakeWhile(char.IsDigit).ToArray());
                 if (!int.TryParse(sampleRateString, out int targetSampleRate) || targetSampleRate <= 0)
                 {
                     return;
                 }
+
+                // Extract the new section to play
+                byte[] sectionToPlay = new byte[end - start];
+                Array.Copy(currentPcmData, start, sectionToPlay, 0, end - start);
 
                 if (checkBoxLowPass.Checked)
                 {
@@ -1078,13 +1094,17 @@ namespace WavConvert4Amiga
                 currentWaveProvider = loopProvider;
                 currentPreviewStart = start;
                 currentPreviewEnd = end;
+
+                // Update waveform viewer
+                waveformViewer.SetSampleRate(targetSampleRate);
+                waveformViewer.SetPlayheadPosition(start);
+                waveformViewer.StartPlayback();
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"Error updating preview: {ex.Message}");
             }
         }
-
         private void StartPreview(int start, int end)
         {
             try
@@ -1130,24 +1150,13 @@ namespace WavConvert4Amiga
                 isPlaying = true;
                 currentPreviewStart = start;
                 currentPreviewEnd = end;
-                waveOut.Play();
 
-                // Start playhead animation with correct sample rate
+                // Configure waveform viewer for playback
                 waveformViewer.SetSampleRate(targetSampleRate);
-                waveformViewer.UpdatePlayPosition(start);
+                waveformViewer.SetPlayheadPosition(start);  // Use new method to set initial position
                 waveformViewer.StartPlayback();
 
-                // Get current loop points
-                var (loopStart, loopEnd) = waveformViewer.GetLoopPoints();
-
-                // If no loop points are set, configure playback for full file preview
-                if (loopStart < 0 || loopEnd < 0)
-                {
-                    currentPreviewStart = 0;
-                    currentPreviewEnd = currentPcmData.Length;
-                }
-
-
+                waveOut.Play();
                 btnPreviewLoop.Text = "Stop";
             }
             catch (Exception ex)
@@ -1190,8 +1199,11 @@ namespace WavConvert4Amiga
                 catch (Exception) { }
             }
 
-            // Stop playhead animation
-            waveformViewer?.StopPlayheadAnimation();
+            // Stop playhead animation and reset position
+            if (waveformViewer != null)
+            {
+                waveformViewer.StopPlayheadAnimation();
+            }
 
             isPlaying = false;
             btnPreviewLoop.Text = "Preview";
@@ -1374,7 +1386,8 @@ namespace WavConvert4Amiga
         }
         private void ProcessSampleRateChange()
         {
-
+            // Stop any current playback
+            StopPreview();
             if (originalPcmData == null && !isRecorded) return;
             //if (originalPcmData == null && !string.IsNullOrEmpty(lastLoadedFilePath)) return;
             try
@@ -1445,19 +1458,23 @@ namespace WavConvert4Amiga
         }
         private void OnPlaybackStopped(object sender, StoppedEventArgs e)
         {
-            if (isPlaying && currentWaveProvider is LoopingWaveProvider loopProvider)
+            if (isPlaying)
             {
                 BeginInvoke(new Action(() =>
                 {
-                    if (isPlaying)
+                    // If we have loop points, restart playback
+                    if (currentPreviewStart >= 0 && currentPreviewEnd >= 0)
                     {
                         waveOut?.Play();
+                        waveformViewer.SetPlayheadPosition(currentPreviewStart);
+                    }
+                    else
+                    {
+                        // For full file preview, restart from beginning
+                        waveOut?.Play();
+                        waveformViewer.SetPlayheadPosition(0);
                     }
                 }));
-            }
-            else
-            {
-                StopPreview();
             }
         }
 
@@ -1604,7 +1621,9 @@ namespace WavConvert4Amiga
             {
                 AddToListBox($"Changing sample rate to {rate}Hz...");
             }
-            // Process the sample rate change
+            // Process the sample rate change 
+            // Stop any current playback and processing
+            StopPreview();
             ProcessSampleRateChange();
         }
 
@@ -1742,6 +1761,8 @@ namespace WavConvert4Amiga
         }
         private void ProcessWithCurrentSampleRate(object sender = null)
         {
+            // Stop any current playback before processing
+            StopPreview();
             try
             {
                 // Get target sample rate
@@ -1754,10 +1775,9 @@ namespace WavConvert4Amiga
                 }
 
                 byte[] pcmData;
+                // Store current loop points
                 var (oldStart, oldEnd) = waveformViewer.GetLoopPoints();
 
-                // First stop any current playback
-                StopPreview();
 
                 if (!string.IsNullOrEmpty(lastLoadedFilePath) && !isRecorded)
                 {

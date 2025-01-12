@@ -90,10 +90,14 @@ namespace WavConvert4Amiga
 
                 if (loopStart >= 0 && loopEnd >= 0)
                 {
-                    // Loop mode
+                    // Loop mode - calculate position within loop region
                     int loopLength = loopEnd - loopStart;
-                    int loopedPosition = samplesElapsed % loopLength;
-                    currentPlayPosition = loopStart + loopedPosition;
+                    if (loopLength > 0)
+                    {
+                        // Calculate position within loop
+                        int loopedPosition = samplesElapsed % loopLength;
+                        currentPlayPosition = loopStart + loopedPosition;
+                    }
                 }
                 else
                 {
@@ -101,10 +105,18 @@ namespace WavConvert4Amiga
                     currentPlayPosition = samplesElapsed;
                     if (audioData != null && currentPlayPosition >= audioData.Length)
                     {
-                        StopPlayheadAnimation();
-                        return;
+                        // Reset to beginning when reaching the end in full file mode
+                        currentPlayPosition = 0;
+                        playbackStartTime = DateTime.Now;
                     }
                 }
+
+                // Ensure position stays within valid range
+                if (audioData != null)
+                {
+                    currentPlayPosition = Math.Max(0, Math.Min(currentPlayPosition, audioData.Length - 1));
+                }
+
                 this.Invalidate();
             }
         }
@@ -113,8 +125,28 @@ namespace WavConvert4Amiga
         {
             playbackStartTime = DateTime.Now;
             playheadTimer.Start();
+
+            // If we have loop points, ensure we start from loop start
+            if (loopStart >= 0 && loopEnd >= 0)
+            {
+                currentPlayPosition = loopStart;
+            }
+            else
+            {
+                currentPlayPosition = 0;
+            }
         }
 
+        // Add this method to explicitly set playhead position
+        public void SetPlayheadPosition(int position)
+        {
+            if (position >= 0 && audioData != null && position < audioData.Length)
+            {
+                currentPlayPosition = position;
+                playbackStartTime = DateTime.Now.AddSeconds(-((double)position / sampleRate));
+                this.Invalidate();
+            }
+        }
 
         public void SetAudioData(byte[] data)
         {
@@ -148,6 +180,15 @@ namespace WavConvert4Amiga
             LoopPointsChanged?.Invoke(this, (start, end));
             Invalidate(); // Redraw to show new loop points
         }
+
+        public void ClearLoopPoints()
+        {
+            loopStart = -1;
+            loopEnd = -1;
+            LoopPointsChanged?.Invoke(this, (-1, -1));
+            Invalidate();
+        }
+
         protected override void OnMouseDown(MouseEventArgs e)
         {
             base.OnMouseDown(e);
@@ -155,6 +196,13 @@ namespace WavConvert4Amiga
             if (audioData == null) return;
 
             int clickedSample = XToSample(e.X);
+
+            // Right click to clear loop points
+            if (e.Button == MouseButtons.Right)
+            {
+                ClearLoopPoints();
+                return;
+            }
 
             // If we're near either loop point, start dragging it
             if (loopStart >= 0 && Math.Abs(SampleToX(loopStart) - e.X) <= DRAG_THRESHOLD)
@@ -167,6 +215,12 @@ namespace WavConvert4Amiga
             {
                 isDraggingEnd = true;
                 return;
+            }
+
+            // If Control key is held, clear existing points before setting new ones
+            if (ModifierKeys == Keys.Control)
+            {
+                ClearLoopPoints();
             }
 
             // If we're not dragging, set new points
@@ -188,8 +242,8 @@ namespace WavConvert4Amiga
             else
             {
                 // Start new loop points
+                ClearLoopPoints();
                 loopStart = clickedSample;
-                loopEnd = -1;
             }
             Invalidate();
         }
