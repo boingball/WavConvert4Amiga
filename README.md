@@ -81,6 +81,11 @@ MIT License
 - ProTracker documentation for frequency tables
 
 ## Version History
+### v1.1
+- Fixed Bugs
+- UI Changes
+- Play back head shown in green
+  
 ### v1.0
 - Initial release
 - Complete waveform editing functionality
