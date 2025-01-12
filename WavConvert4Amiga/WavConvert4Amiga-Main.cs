@@ -28,6 +28,7 @@ namespace WavConvert4Amiga
         private WaveformProcessor waveformProcessor;
         private RecordedAudioData recordedAudioData;
         private RecordingIndicator recordingIndicator;
+        private AudioEffectsProcessor audioEffects;
         private ComboBox comboBoxPTNote;
         private CheckBox checkBoxNTSC;
         private WaveOut waveOut;
@@ -95,6 +96,7 @@ namespace WavConvert4Amiga
             // Initialize UI
             InitializeWaveformControls();
             InitializeAmplificationControls();  // This creates trackBarAmplify
+            InitializeEffectsPanel();
             audioRecorder = new SystemAudioRecorder();
             InitializeRecordingButtons();
             InitializePTNoteComboBox();
@@ -664,8 +666,6 @@ namespace WavConvert4Amiga
             }
         }
 
-
-
         private void BtnUndo_Click(object sender, EventArgs e)
         {
             if (undoStack.Count == 0) return;
@@ -916,8 +916,6 @@ namespace WavConvert4Amiga
             }
         }
 
-  
-
         private void PushRedo(byte[] data)
         {
             // Create a copy of the data
@@ -1029,7 +1027,6 @@ namespace WavConvert4Amiga
                              loopPoints.end >= 0 &&
                              loopPoints.start < loopPoints.end;
         }
-
 
         private void UpdatePreviewLoopPoints(int start, int end)
         {
@@ -1383,6 +1380,212 @@ namespace WavConvert4Amiga
         private static byte Clamp(byte value, byte min, byte max)
         {
             return (byte)Math.Max(min, Math.Min(max, value));
+        }
+
+        private void InitializeEffectsPanel()
+        {
+            audioEffects = new AudioEffectsProcessor();
+
+            // Create effects panel
+            Panel effectsPanel = new Panel
+            {
+                Location = new Point(panelBottom.Width - 300, 10),
+                Size = new Size(280, 200),
+                BackColor = Color.FromArgb(180, 190, 210)
+            };
+            AddBevelToPanel(effectsPanel);
+
+            // Create label
+            Label labelEffects = new Label
+            {
+                Text = "Sound Effects",
+                Location = new Point(10, 10),
+                AutoSize = true,
+                ForeColor = Color.FromArgb(255, 215, 0)
+            };
+            effectsPanel.Controls.Add(labelEffects);
+
+            // Create effect buttons
+            var buttonY = 40;
+            CreateEffectButton("Underwater Effect", new Point(10, buttonY), effectsPanel, ApplyUnderwaterEffect);
+            CreateEffectButton("Robot Voice", new Point(150, buttonY), effectsPanel, ApplyRobotEffect);
+
+            buttonY += 40;
+            CreateEffectButton("High Pitch", new Point(10, buttonY), effectsPanel, ApplyHighPitchEffect);
+            CreateEffectButton("Low Pitch", new Point(150, buttonY), effectsPanel, ApplyLowPitchEffect);
+
+            buttonY += 40;
+            CreateEffectButton("Echo Effect", new Point(10, buttonY), effectsPanel, ApplyEchoEffect);
+            CreateEffectButton("Reset Effects", new Point(150, buttonY), effectsPanel, ResetEffects);
+
+            panelBottom.Controls.Add(effectsPanel);
+        }
+
+        private void CreateEffectButton(string text, Point location, Panel parent, EventHandler clickHandler)
+        {
+            RetroButton button = new RetroButton
+            {
+                Text = text,
+                Location = location,
+                Size = new Size(120, 30)
+            };
+            button.Click += clickHandler;
+            parent.Controls.Add(button);
+        }
+
+        // Effect handlers
+        private void ApplyUnderwaterEffect(object sender, EventArgs e)
+        {
+            if (currentPcmData == null) return;
+            AddToListBox("Applying underwater effect...");
+
+            try
+            {
+                // Create a copy of current data for undo
+                byte[] prevData = new byte[currentPcmData.Length];
+                Array.Copy(currentPcmData, prevData, currentPcmData.Length);
+                PushUndo(prevData);
+
+                // Apply effect
+                currentPcmData = audioEffects.ApplyUnderwaterEffect(currentPcmData, GetSelectedSampleRate());
+                waveformViewer.SetAudioData(currentPcmData);
+
+                // Clear redo stack and update UI
+                redoStack.Clear();
+                UpdateEditButtonStates();
+                AddToListBox("Underwater effect applied");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error applying effect: {ex.Message}", "Effect Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void ApplyRobotEffect(object sender, EventArgs e)
+        {
+            if (currentPcmData == null) return;
+            AddToListBox("Applying robot voice effect...");
+
+            try
+            {
+                // Create a copy of current data for undo
+                byte[] prevData = new byte[currentPcmData.Length];
+                Array.Copy(currentPcmData, prevData, currentPcmData.Length);
+                PushUndo(prevData);
+
+                // Apply effect
+                currentPcmData = audioEffects.ApplyRobotEffect(currentPcmData, GetSelectedSampleRate());
+                waveformViewer.SetAudioData(currentPcmData);
+
+                // Clear redo stack and update UI
+                redoStack.Clear();
+                UpdateEditButtonStates();
+                AddToListBox("Robot voice effect applied");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error applying effect: {ex.Message}", "Effect Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void ApplyHighPitchEffect(object sender, EventArgs e)
+        {
+            if (currentPcmData == null) return;
+            AddToListBox("Applying high pitch effect...");
+
+            try
+            {
+                // Create a copy of current data for undo
+                byte[] prevData = new byte[currentPcmData.Length];
+                Array.Copy(currentPcmData, prevData, currentPcmData.Length);
+                PushUndo(prevData);
+
+                // Apply effect
+                currentPcmData = audioEffects.ApplyPitchShift(currentPcmData, GetSelectedSampleRate(), 1.5f);
+                waveformViewer.SetAudioData(currentPcmData);
+
+                // Clear redo stack and update UI
+                redoStack.Clear();
+                UpdateEditButtonStates();
+                AddToListBox("High pitch effect applied");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error applying effect: {ex.Message}", "Effect Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void ApplyLowPitchEffect(object sender, EventArgs e)
+        {
+            if (currentPcmData == null) return;
+            AddToListBox("Applying low pitch effect...");
+
+            try
+            {
+                // Create a copy of current data for undo
+                byte[] prevData = new byte[currentPcmData.Length];
+                Array.Copy(currentPcmData, prevData, currentPcmData.Length);
+                PushUndo(prevData);
+
+                // Apply effect
+                currentPcmData = audioEffects.ApplyPitchShift(currentPcmData, GetSelectedSampleRate(), 0.75f);
+                waveformViewer.SetAudioData(currentPcmData);
+
+                // Clear redo stack and update UI
+                redoStack.Clear();
+                UpdateEditButtonStates();
+                AddToListBox("Low pitch effect applied");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error applying effect: {ex.Message}", "Effect Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void ApplyEchoEffect(object sender, EventArgs e)
+        {
+            if (currentPcmData == null) return;
+            AddToListBox("Applying echo effect...");
+
+            try
+            {
+                // Create a copy of current data for undo
+                byte[] prevData = new byte[currentPcmData.Length];
+                Array.Copy(currentPcmData, prevData, currentPcmData.Length);
+                PushUndo(prevData);
+
+                // Apply effect
+                currentPcmData = audioEffects.ApplyEchoEffect(currentPcmData, GetSelectedSampleRate());
+                waveformViewer.SetAudioData(currentPcmData);
+
+                // Clear redo stack and update UI
+                redoStack.Clear();
+                UpdateEditButtonStates();
+                AddToListBox("Echo effect applied");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error applying effect: {ex.Message}", "Effect Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void ResetEffects(object sender, EventArgs e)
+        {
+            if (originalPcmData == null) return;
+            AddToListBox("Resetting effects...");
+
+            try
+            {
+                PushUndo(currentPcmData);
+                currentPcmData = new byte[originalPcmData.Length];
+                Array.Copy(originalPcmData, currentPcmData, originalPcmData.Length);
+                ProcessWithCurrentSampleRate();
+                AddToListBox("Effects reset to original");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error resetting effects: {ex.Message}", "Reset Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
         private void ProcessSampleRateChange()
         {
