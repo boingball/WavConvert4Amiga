@@ -28,6 +28,7 @@
         /// </summary>
         private void InitializeComponent()
         {
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(MainForm));
             this.label1 = new System.Windows.Forms.Label();
             this.panel1 = new System.Windows.Forms.Panel();
             this.label2 = new System.Windows.Forms.Label();
@@ -55,6 +56,8 @@
             // panel1
             // 
             this.panel1.AllowDrop = true;
+            this.panel1.BackgroundImage = global::WavConvert4Amiga.Properties.Resources.WC4A_icon;
+            this.panel1.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Zoom;
             this.panel1.Controls.Add(this.label2);
             this.panel1.Location = new System.Drawing.Point(1140, 657);
             this.panel1.Name = "panel1";
@@ -67,7 +70,7 @@
             // 
             this.label2.AutoSize = true;
             this.label2.Font = new System.Drawing.Font("Minecraft Ten", 14.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.label2.Location = new System.Drawing.Point(125, 180);
+            this.label2.Location = new System.Drawing.Point(126, 21);
             this.label2.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             this.label2.Name = "label2";
             this.label2.Size = new System.Drawing.Size(299, 29);
@@ -182,6 +185,7 @@
             this.Controls.Add(this.checkBoxEnable8SVX);
             this.DoubleBuffered = true;
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedSingle;
+            this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.Name = "MainForm";
             this.Text = "SoundConvert4Amiga";
             this.Load += new System.EventHandler(this.MainForm_Load);

@@ -79,5 +79,15 @@ namespace WavConvert4Amiga.Properties {
                 return ((byte[])(obj));
             }
         }
+        
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap WC4A_icon {
+            get {
+                object obj = ResourceManager.GetObject("WC4A_icon", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
     }
 }
