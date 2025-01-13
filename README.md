@@ -12,6 +12,7 @@ A Windows utility designed to convert WAV files for optimal use with Amiga compu
 - Built-in low-pass filter option
 - Adjustable amplification control
 - 8SVX file format support
+- 8SVX loop points support
 
 ### Waveform Editor
 - Visual waveform display with zoom controls
@@ -45,14 +46,18 @@ A Windows utility designed to convert WAV files for optimal use with Amiga compu
 ### Setting Loop Points
 1. Click in the waveform to set start point
 2. Click again to set end point
-3. Use "Preview" to test the loop
-4. Save loop using either "Save Loop" or "Save Loop Points (8SVX)"
+3. Loop will preview automatically
+4. Save loop as using either "Save Loop" or "Save Loop Points (8SVX)"
 
 ### Recording Audio
 1. Choose "Record System" or "Record Mic"
-2. Set desired sample rate before recording
-3. Click "Stop Recording" when finished
-4. Process the recorded audio as needed
+2. Click "Stop Recording" when finished
+3. Process the recorded audio as needed
+
+### AudioFX
+1. Pick any AudioFX one sample is loaded or recorded.
+2. Click Convert Current or set loop points to save sample/section with effects
+
 
 ### Keyboard Shortcuts
 - `Ctrl+Z`: Undo
