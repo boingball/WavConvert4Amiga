@@ -21,6 +21,8 @@ namespace WavConvert4Amiga
         private Color playheadColor = Color.FromArgb(144, 238, 144); // Light green color
         private int currentPlayPosition = -1; // Current playback position
         private Timer playheadTimer;
+        private int scrollPosition = 0;
+        private int maxScroll = 0;
 
         public event EventHandler<(int start, int end)> LoopPointsChanged;
         private bool isDraggingEnd = false;
@@ -153,6 +155,10 @@ namespace WavConvert4Amiga
             audioData = data;
             loopStart = -1;
             loopEnd = -1;
+            scrollPosition = 0;
+
+            // Calculate maximum scroll value based on zoom
+            UpdateScrollParameters();
 
             if (InvokeRequired)
             {
@@ -166,6 +172,34 @@ namespace WavConvert4Amiga
             {
                 Invalidate();
                 Update();
+            }
+        }
+
+        // update scroll parameters
+        private void UpdateScrollParameters()
+        {
+            if (audioData == null || audioData.Length == 0)
+            {
+                maxScroll = 0;
+                return;
+            }
+
+            // Calculate how many samples are visible at current zoom
+            int visibleSamples = (int)(Width * (audioData.Length / (float)Width) / zoomFactor);
+
+            // Maximum scroll is total samples minus visible samples
+            maxScroll = Math.Max(0, audioData.Length - visibleSamples);
+
+            // Update scrollbar on parent form if it exists
+            if (Parent != null)
+            {
+                var scrollBar = Parent.Controls.OfType<HScrollBar>().FirstOrDefault();
+                if (scrollBar != null)
+                {
+                    scrollBar.Minimum = 0;
+                    scrollBar.Maximum = maxScroll + scrollBar.LargeChange;
+                    scrollBar.Value = Math.Min(scrollBar.Value, maxScroll);
+                }
             }
         }
 
@@ -283,14 +317,14 @@ namespace WavConvert4Amiga
 
             e.Graphics.Clear(Color.Black);
 
-            int centerY = (int)(this.Height * 0.55);//Move to 55% from top
+            int centerY = (int)(this.Height * 0.55);
             float yScale = (Height / 2) / 128f;
-            // Draw waveform
+
             using (var pen = new Pen(Color.Blue))
             {
-                // Calculate visible portion based on zoom
+                // Calculate visible portion based on zoom and scroll
                 int visibleSamples = (int)(audioData.Length / zoomFactor);
-                int startSample = 0; // Can be adjusted for scrolling later
+                int startSample = scrollPosition;
 
                 for (int x = 0; x < Width; x++)
                 {
@@ -305,8 +339,11 @@ namespace WavConvert4Amiga
 
                     for (int i = sampleIndex; i < nextIndex; i++)
                     {
-                        minSample = Math.Min(minSample, audioData[i]);
-                        maxSample = Math.Max(maxSample, audioData[i]);
+                        if (i < audioData.Length)
+                        {
+                            minSample = Math.Min(minSample, audioData[i]);
+                            maxSample = Math.Max(maxSample, audioData[i]);
+                        }
                     }
 
                     int minY = centerY + (int)((minSample - 128) * yScale);
@@ -321,15 +358,16 @@ namespace WavConvert4Amiga
 
                     e.Graphics.DrawLine(pen, x, minY, x, maxY);
                 }
-
             }
-            // Draw loop points
+
+            // Draw loop points adjusted for scroll position
             if (loopStart >= 0)
             {
                 using (var pen = new Pen(Color.Red, 2))
                 {
-                    int x = (int)((long)loopStart * Width / (audioData.Length / zoomFactor));
-                    e.Graphics.DrawLine(pen, x, 0, x, Height);
+                    int x = (int)((long)(loopStart - scrollPosition) * Width / (audioData.Length / zoomFactor));
+                    if (x >= 0 && x < Width)
+                        e.Graphics.DrawLine(pen, x, 0, x, Height);
                 }
             }
 
@@ -337,21 +375,24 @@ namespace WavConvert4Amiga
             {
                 using (var pen = new Pen(Color.Red, 2))
                 {
-                    int x = (int)((long)loopEnd * Width / (audioData.Length / zoomFactor));
-                    e.Graphics.DrawLine(pen, x, 0, x, Height);
+                    int x = (int)((long)(loopEnd - scrollPosition) * Width / (audioData.Length / zoomFactor));
+                    if (x >= 0 && x < Width)
+                        e.Graphics.DrawLine(pen, x, 0, x, Height);
                 }
             }
 
-            // Draw playhead
+            // Draw playhead adjusted for scroll position
             if (currentPlayPosition >= 0)
             {
                 using (var pen = new Pen(playheadColor, 2))
                 {
-                    int x = (int)((long)currentPlayPosition * Width / (audioData.Length / zoomFactor));
-                    e.Graphics.DrawLine(pen, x, 0, x, Height);
+                    int x = (int)((long)(currentPlayPosition - scrollPosition) * Width / (audioData.Length / zoomFactor));
+                    if (x >= 0 && x < Width)
+                        e.Graphics.DrawLine(pen, x, 0, x, Height);
                 }
             }
         }
+
         protected override void OnMouseUp(MouseEventArgs e)
         {
             isDraggingStart = false;
@@ -424,13 +465,35 @@ namespace WavConvert4Amiga
 
         public void ZoomIn()
         {
+            float oldZoom = zoomFactor;
             zoomFactor = Math.Min(zoomFactor * ZOOM_STEP, MAX_ZOOM);
+
+            // Adjust scroll position to keep the center point centered
+            if (oldZoom != zoomFactor)
+            {
+                float centerPoint = scrollPosition + (Width / 2f) * (audioData.Length / Width) / oldZoom;
+                UpdateScrollParameters();
+                scrollPosition = (int)(centerPoint - (Width / 2f) * (audioData.Length / Width) / zoomFactor);
+                scrollPosition = Math.Max(0, Math.Min(scrollPosition, maxScroll));
+            }
+
             Invalidate();
         }
 
         public void ZoomOut()
         {
+            float oldZoom = zoomFactor;
             zoomFactor = Math.Max(zoomFactor / ZOOM_STEP, MIN_ZOOM);
+
+            // Adjust scroll position to keep the center point centered
+            if (oldZoom != zoomFactor)
+            {
+                float centerPoint = scrollPosition + (Width / 2f) * (audioData.Length / Width) / oldZoom;
+                UpdateScrollParameters();
+                scrollPosition = (int)(centerPoint - (Width / 2f) * (audioData.Length / Width) / zoomFactor);
+                scrollPosition = Math.Max(0, Math.Min(scrollPosition, maxScroll));
+            }
+
             Invalidate();
         }
 
@@ -456,18 +519,34 @@ namespace WavConvert4Amiga
 
         public void ScrollTo(int offset)
         {
-            scrollOffset = Math.Max(0, offset);
+            scrollPosition = Math.Max(0, Math.Min(offset, maxScroll));
             Invalidate();
         }
+
+        // New version with zoom and scroll handling
         private int XToSample(int x)
         {
             if (audioData == null || Width == 0) return 0;
-            return (int)((long)x * audioData.Length / Width);
+
+            // NEW: Calculate samples per pixel at current zoom level
+            float samplesPerPixel = (audioData.Length / (float)Width) / zoomFactor;
+
+            // NEW: Convert x coordinate to sample index, accounting for scroll position
+            int sampleIndex = (int)(scrollPosition + (x * samplesPerPixel));
+
+            // NEW: Clamp to valid range
+            return Math.Max(0, Math.Min(sampleIndex, audioData.Length - 1));
         }
+
         private int SampleToX(int sample)
         {
             if (audioData == null || audioData.Length == 0) return 0;
-            return (int)((long)sample * Width / audioData.Length);
+
+            // NEW: Calculate pixels per sample at current zoom level
+            float pixelsPerSample = (Width * zoomFactor) / (float)audioData.Length;
+
+            // NEW: Convert sample index to x coordinate, accounting for scroll position
+            return (int)((sample - scrollPosition) * pixelsPerSample);
         }
         public void RestoreLoopPoints(int start, int end)
         {

@@ -1379,7 +1379,7 @@ namespace WavConvert4Amiga
 
         private void InitializeEffectsPanel()
         {
-            audioEffects = new AudioEffectsProcessor();
+            audioEffects = new AudioEffectsProcessor(cursorType => SetCustomCursor(cursorType));
 
             // Create effects panel
             Panel effectsPanel = new Panel
@@ -2393,7 +2393,7 @@ namespace WavConvert4Amiga
         {
             try
             {
-                int tileSize = 16;  // Reduced from 64 to 16
+                int tileSize = 32;  // Reduced from 64 to 16
                 Bitmap checkerTile = new Bitmap(tileSize, tileSize);
                 using (Graphics g = Graphics.FromImage(checkerTile))
                 {
@@ -2505,6 +2505,7 @@ namespace WavConvert4Amiga
                 if (control is Label label)
                 {
                     label.ForeColor = Color.FromArgb(255, 215, 0); // Gold text
+                    label.Font = new Font("Consolas", 9f, System.Drawing.FontStyle.Bold);
                     label.BackColor = Color.Transparent;
                 }
             }
