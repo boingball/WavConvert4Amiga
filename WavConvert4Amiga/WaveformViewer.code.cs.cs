@@ -465,6 +465,7 @@ namespace WavConvert4Amiga
 
         public void ZoomIn()
         {
+            if (audioData == null) return;
             float oldZoom = zoomFactor;
             zoomFactor = Math.Min(zoomFactor * ZOOM_STEP, MAX_ZOOM);
 
@@ -482,6 +483,7 @@ namespace WavConvert4Amiga
 
         public void ZoomOut()
         {
+            if (audioData == null) return;
             float oldZoom = zoomFactor;
             zoomFactor = Math.Max(zoomFactor / ZOOM_STEP, MIN_ZOOM);
 

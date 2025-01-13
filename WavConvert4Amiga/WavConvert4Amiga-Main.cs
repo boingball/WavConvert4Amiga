@@ -88,6 +88,7 @@ namespace WavConvert4Amiga
         public MainForm()
         {
             InitializeComponent();
+            InitializeLoadPanel();
             // Create the checkerboard background
             waveformProcessor = new WaveformProcessor();
             CreateCheckerboardBackground();
@@ -303,6 +304,46 @@ namespace WavConvert4Amiga
             if (customCursors.ContainsKey(cursorType))
             {
                 this.Cursor = customCursors[cursorType];
+            }
+        }
+
+        private void InitializeLoadPanel()
+        {
+            panel1.Cursor = Cursors.Hand;
+            panel1.Click += LoadPanel_Click;
+        }
+        private void LoadPanel_Click(object sender, EventArgs e)
+        {
+            using (OpenFileDialog openFileDialog = new OpenFileDialog())
+            {
+                openFileDialog.Filter = "WAV files (*.wav)|*.wav|All files (*.*)|*.*";
+                openFileDialog.FilterIndex = 1;
+                openFileDialog.Multiselect = true;
+                openFileDialog.Title = "Select WAV Files";
+
+                if (openFileDialog.ShowDialog() == DialogResult.OK)
+                {
+                    SetCustomCursor("busy");
+                    try
+                    {
+                        foreach (string filePath in openFileDialog.FileNames)
+                        {
+                            if (Path.GetExtension(filePath).ToLower() == ".wav")
+                            {
+                                ProcessWaveFile(filePath);
+                            }
+                            else
+                            {
+                                MessageBox.Show($"File {Path.GetFileName(filePath)} is not a WAV file.",
+                                    "Invalid File", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        SetCustomCursor("normal");
+                    }
+                }
             }
         }
 
@@ -714,6 +755,96 @@ namespace WavConvert4Amiga
             }
         }
 
+        private void DisableControlsDuringRecording()
+        {
+
+            foreach (Control control in panelWaveform.Controls)
+            {
+                control.Enabled = false;
+            }
+            // Disable top controls
+            checkBoxEnable8SVX.Enabled = false;
+            checkBoxAutoConvert.Enabled = false;
+            checkBoxMoveOriginal.Enabled = false;
+            checkBoxLowPass.Enabled = false;
+            listBoxFiles.Enabled = false;
+
+            // Disable panels and their contents
+            panel1.AllowDrop = false;
+            panel1.Enabled = false;
+            panelWaveform.Enabled = false;
+
+            // Explicitly disable specific buttons
+            btnRecordSystemSound.Enabled = false;
+            btnRecordMicrophone.Enabled = false;
+            btnManualConvert.Enabled = false;
+            btnZoomIn.Enabled = false;
+            btnZoomOut.Enabled = false;
+            btnPreviewLoop.Enabled = false;
+            btnCut.Enabled = false;
+            btnUndo.Enabled = false;
+            btnRedo.Enabled = false;
+
+            // Disable interactive controls
+            comboBoxSampleRate.Enabled = false;
+            comboBoxPTNote.Enabled = false;
+            checkBoxNTSC.Enabled = false;
+            trackBarAmplify.Enabled = false;
+
+            // Disable effects panel
+            panelBottom.Controls.OfType<Panel>().Where(p => p != btnStopRecording.Parent).ToList()
+                .ForEach(p => p.Enabled = false);
+
+            // Ensure stop button stays enabled
+            btnStopRecording.Enabled = true;
+            btnStopRecording.Invalidate();
+
+        }
+        private void EnableAllControls()
+        {
+            foreach (Control control in panelWaveform.Controls)
+            {
+                control.Enabled = true;
+            }
+
+            // Disable top controls
+            checkBoxEnable8SVX.Enabled = true;
+            checkBoxAutoConvert.Enabled = true;
+            checkBoxMoveOriginal.Enabled = true;
+            checkBoxLowPass.Enabled = true;
+            listBoxFiles.Enabled = true;
+
+            // Disable panels and their contents
+            panel1.AllowDrop = true;
+            panel1.Enabled = true;
+            panelWaveform.Enabled = true;
+
+            // Explicitly enable specific buttons
+            btnRecordSystemSound.Enabled = true;
+            btnRecordMicrophone.Enabled = true;
+            btnManualConvert.Enabled = true;
+            btnZoomIn.Enabled = true;
+            btnZoomOut.Enabled = true;
+            btnPreviewLoop.Enabled = true;
+            btnCut.Enabled = true;
+            btnUndo.Enabled = true;
+            btnRedo.Enabled = true;
+
+            // Disable interactive controls
+            comboBoxSampleRate.Enabled = true;
+            comboBoxPTNote.Enabled = true;
+            checkBoxNTSC.Enabled = true;
+            trackBarAmplify.Enabled = true;
+
+            // Disable effects panel
+            panelBottom.Controls.OfType<Panel>().Where(p => p != btnStopRecording.Parent).ToList()
+                .ForEach(p => p.Enabled = true);
+
+            // Ensure stop button stays enabled
+            btnStopRecording.Enabled = false;
+            btnStopRecording.Invalidate();
+        }
+
         private void InitializeRecordingButtons()
         {
             audioRecorder = new SystemAudioRecorder();
@@ -743,10 +874,10 @@ namespace WavConvert4Amiga
                     AddToListBox($"Recording system sound at {sampleRate} Hz...");
                     isRecorded = true;
 
-                    // Update UI state
-                    btnRecordSystemSound.Enabled = false;
-                    btnRecordMicrophone.Enabled = false;
+                    // Disable all controls except stop recording
+                    DisableControlsDuringRecording();
                     btnStopRecording.Enabled = true;
+
 
                     // Show and start recording indicator
                     recordingIndicator.RecordingType = "system";
@@ -778,9 +909,8 @@ namespace WavConvert4Amiga
                     AddToListBox($"Recording microphone at {sampleRate} Hz...");
                     isRecorded = true;
 
-                    // Update UI state
-                    btnRecordSystemSound.Enabled = false;
-                    btnRecordMicrophone.Enabled = false;
+                    // Disable all controls except stop recording
+                    DisableControlsDuringRecording();
                     btnStopRecording.Enabled = true;
 
                     // Show and start recording indicator
@@ -860,8 +990,8 @@ namespace WavConvert4Amiga
                 }
                 finally
                 {
-                    btnRecordSystemSound.Enabled = true;
-                    btnRecordMicrophone.Enabled = true;
+                    // Re-enable all controls
+                    EnableAllControls();
                     btnStopRecording.Enabled = false;
                 }
             };
@@ -1437,7 +1567,8 @@ namespace WavConvert4Amiga
             {
                 // Store playback state
                 bool wasPlaying = isPlaying;
-                var (loopStart, loopEnd) = waveformViewer.GetLoopPoints();
+                var (oldLoopStart, oldLoopEnd) = waveformViewer.GetLoopPoints();
+                float oldLength = currentPcmData.Length;  // NEW: Store original length
 
                 // Stop playback temporarily
                 if (wasPlaying)
@@ -1459,17 +1590,24 @@ namespace WavConvert4Amiga
                 UpdateEditButtonStates();
 
                 // Restore loop points if they existed
-                if (loopStart >= 0 && loopEnd >= 0)
+                // Adjust and restore loop points if they existed
+                if (oldLoopStart >= 0 && oldLoopEnd >= 0)
                 {
-                    waveformViewer.RestoreLoopPoints(loopStart, loopEnd);
+                    float ratio = currentPcmData.Length / oldLength;  // NEW: Calculate scaling ratio
+                    int newLoopStart = (int)(oldLoopStart * ratio);  // NEW: Scale start point
+                    int newLoopEnd = (int)(oldLoopEnd * ratio);      // NEW: Scale end point
+                    waveformViewer.RestoreLoopPoints(newLoopStart, newLoopEnd);
                 }
 
                 // Restore playback if it was playing
                 if (wasPlaying)
                 {
-                    if (loopStart >= 0 && loopEnd >= 0)
+                    if (oldLoopStart >= 0 && oldLoopEnd >= 0)
                     {
-                        StartPreview(loopStart, loopEnd);
+                        float ratio = currentPcmData.Length / oldLength;
+                        int newLoopStart = (int)(oldLoopStart * ratio);
+                        int newLoopEnd = (int)(oldLoopEnd * ratio);
+                        StartPreview(newLoopStart, newLoopEnd);
                     }
                     else
                     {
@@ -1514,12 +1652,13 @@ namespace WavConvert4Amiga
         {
             if (originalPcmData == null) return;
             AddToListBox("Resetting effects...");
-
+            SetCustomCursor("busy");
             try
             {
                 // Store playback state
                 bool wasPlaying = isPlaying;
-                var (loopStart, loopEnd) = waveformViewer.GetLoopPoints();
+                var (oldLoopStart, oldLoopEnd) = waveformViewer.GetLoopPoints();
+                float oldLength = currentPcmData.Length;  // NEW
 
                 // Stop playback temporarily
                 if (wasPlaying)
@@ -1541,18 +1680,25 @@ namespace WavConvert4Amiga
                 redoStack.Clear();
                 UpdateEditButtonStates();
 
-                // Restore loop points if they existed
-                if (loopStart >= 0 && loopEnd >= 0)
+                // Adjust and restore loop points if they existed
+                if (oldLoopStart >= 0 && oldLoopEnd >= 0)
                 {
-                    waveformViewer.RestoreLoopPoints(loopStart, loopEnd);
+                    float ratio = currentPcmData.Length / oldLength;  // NEW
+                    int newLoopStart = (int)(oldLoopStart * ratio);  // NEW
+                    int newLoopEnd = (int)(oldLoopEnd * ratio);      // NEW
+                    waveformViewer.RestoreLoopPoints(newLoopStart, newLoopEnd);
                 }
+
 
                 // Restore playback if it was playing
                 if (wasPlaying)
                 {
-                    if (loopStart >= 0 && loopEnd >= 0)
+                    if (oldLoopStart >= 0 && oldLoopEnd >= 0)
                     {
-                        StartPreview(loopStart, loopEnd);
+                        float ratio = currentPcmData.Length / oldLength;  // NEW
+                        int newLoopStart = (int)(oldLoopStart * ratio);  // NEW
+                        int newLoopEnd = (int)(oldLoopEnd * ratio);      // NEW
+                        StartPreview(newLoopStart, newLoopEnd);
                     }
                     else
                     {
@@ -1565,6 +1711,9 @@ namespace WavConvert4Amiga
             catch (Exception ex)
             {
                 MessageBox.Show($"Error resetting effects: {ex.Message}", "Reset Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            } finally
+            {
+                SetCustomCursor("normal");
             }
         }
 
