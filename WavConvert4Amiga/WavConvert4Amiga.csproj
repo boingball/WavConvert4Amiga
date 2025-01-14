@@ -101,6 +101,7 @@
       <SubType>Component</SubType>
     </Compile>
     <Compile Include="AudioEffectsProcessor.cs" />
+    <Compile Include="FontManager.cs" />
     <Compile Include="RecordedAudioData.cs" />
     <Compile Include="RecordingIndicator.cs">
       <SubType>Component</SubType>

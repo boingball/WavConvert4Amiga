@@ -21,7 +21,7 @@ namespace WavConvert4Amiga
 
     public partial class MainForm : Form
     {
-
+        private const string VERSION = "1.2.5";
         [DllImport("user32.dll")]
         private static extern IntPtr LoadCursorFromFile(string lpFileName);
         private SystemAudioRecorder audioRecorder;
@@ -47,6 +47,7 @@ namespace WavConvert4Amiga
         private Button btnRecordMicrophone;
         private Button btnStopRecording;
         private HScrollBar hScrollBar;
+        private ComboBox comboBoxMicrophone;
         // Add this field to store the current PCM data
         private byte[] currentPcmData;
         private string lastLoadedFilePath; // Store the path of the last loaded file
@@ -63,7 +64,7 @@ namespace WavConvert4Amiga
         private Label labelAmplify;
         private float amplificationFactor = 1.0f;
         private Dictionary<string, Cursor> customCursors = new Dictionary<string, Cursor>();
-        private Font retroFont = new Font("Consolas", 9f, FontStyle.Regular);
+        private Font retroFont;
         private Stack<byte[]> undoStack = new Stack<byte[]>();
         private Stack<byte[]> redoStack = new Stack<byte[]>();
         private const int MAX_UNDO_STEPS = 20; // Limit memory usage
@@ -88,6 +89,7 @@ namespace WavConvert4Amiga
         public MainForm()
         {
             InitializeComponent();
+            this.Text = $"WAVConvert4Amiga v{VERSION}";
             InitializeLoadPanel();
             // Create the checkerboard background
             waveformProcessor = new WaveformProcessor();
@@ -110,6 +112,7 @@ namespace WavConvert4Amiga
             StyleTrackBar();  // Now the trackbar exists when we try to style it
 
             // Apply retro styling to the main form
+            retroFont = FontManager.GetMainFont();
             this.Font = retroFont;
 
             // Convert existing buttons to RetroButtons
@@ -201,7 +204,7 @@ namespace WavConvert4Amiga
             {
                 listBoxFiles.BackColor = Color.Black;
                 listBoxFiles.ForeColor = Color.FromArgb(180, 190, 210);
-                listBoxFiles.Font = new Font("Consolas", 9f);
+                listBoxFiles.Font = FontManager.GetMainFont(9f);
             }
 
             // Set ComboBox colors
@@ -209,7 +212,7 @@ namespace WavConvert4Amiga
             {
                 comboBoxSampleRate.BackColor = Color.Black;
                 comboBoxSampleRate.ForeColor = Color.FromArgb(180, 190, 210);
-                comboBoxSampleRate.Font = new Font("Consolas", 9f);
+                comboBoxSampleRate.Font = FontManager.GetMainFont(9f, FontStyle.Regular);
             }
         }
 
@@ -330,6 +333,8 @@ namespace WavConvert4Amiga
                         {
                             if (Path.GetExtension(filePath).ToLower() == ".wav")
                             {
+                                StopPreview();
+                                trackBarAmplify.Value = 100;
                                 ProcessWaveFile(filePath);
                             }
                             else
@@ -351,7 +356,7 @@ namespace WavConvert4Amiga
         {
             comboBoxSampleRate.ForeColor = Color.FromArgb(255, 215, 0); // Gold color
             comboBoxSampleRate.BackColor = Color.Black;
-            comboBoxSampleRate.Font = new Font("Consolas", 9f);
+            comboBoxSampleRate.Font = FontManager.GetMainFont(9f);
             comboBoxSampleRate.DrawMode = DrawMode.OwnerDrawFixed;
             comboBoxSampleRate.DrawItem += ComboBoxSampleRate_DrawItem;
         }
@@ -398,7 +403,7 @@ namespace WavConvert4Amiga
             // Style to match existing controls
             comboBoxPTNote.BackColor = Color.Black;
             comboBoxPTNote.ForeColor = Color.FromArgb(255, 215, 0);
-            comboBoxPTNote.Font = new Font("Consolas", 9f);
+            comboBoxPTNote.Font = FontManager.GetMainFont(9f);
             comboBoxPTNote.DrawMode = DrawMode.OwnerDrawFixed;
             comboBoxPTNote.DrawItem += ComboBoxPTNote_DrawItem;
 
@@ -510,7 +515,7 @@ namespace WavConvert4Amiga
             // Set gold color and monospace font
             listBoxFiles.ForeColor = Color.FromArgb(255, 215, 0); // Gold color
             listBoxFiles.BackColor = Color.Black;
-            listBoxFiles.Font = new Font("Consolas", 9f);
+            listBoxFiles.Font = FontManager.GetMainFont();
 
             // Override the default add method to always scroll to last item
             listBoxFiles.DrawMode = DrawMode.OwnerDrawFixed;
@@ -853,7 +858,7 @@ namespace WavConvert4Amiga
             Panel recordingPanel = new Panel
             {
                 Location = new Point(10, 10),
-                Size = new Size(325, 100),
+                Size = new Size(325, 160),
                 BackColor = Color.FromArgb(180, 190, 210)
             };
             AddBevelToPanel(recordingPanel);
@@ -900,13 +905,80 @@ namespace WavConvert4Amiga
                 Size = new Size(150, 30),
                 Location = new Point(170, 10)
             };
+
+            // Add Microphone Selection ComboBox
+            Label labelMic = new Label
+            {
+                Text = "Microphone:",
+                Location = new Point(10, 90),
+                AutoSize = true,
+                ForeColor = Color.Black,
+                Font = FontManager.GetMainFont(9f)
+            };
+            recordingPanel.Controls.Add(labelMic);
+          
+            comboBoxMicrophone = new ComboBox
+            {
+                Location = new Point(100, 88),
+                Size = new Size(215, 25),
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                BackColor = Color.Black,
+                ForeColor = Color.FromArgb(255, 215, 0),
+                Font = FontManager.GetMainFont(9f)
+            };
+            // Style the combo box
+            comboBoxMicrophone.DrawMode = DrawMode.OwnerDrawFixed;
+            comboBoxMicrophone.DrawItem += (s, e) =>
+            {
+                e.DrawBackground();
+                if (e.Index >= 0)
+                {
+                    using (var brush = new SolidBrush(Color.FromArgb(255, 215, 0)))
+                    {
+                        e.Graphics.DrawString(comboBoxMicrophone.Items[e.Index].ToString(),
+                            e.Font, brush, e.Bounds);
+                    }
+                }
+                e.DrawFocusRectangle();
+            };
+
+            // Populate microphone list
+            var mics = SystemAudioRecorder.GetAvailableMicrophones();
+            foreach (var mic in mics)
+            {
+                comboBoxMicrophone.Items.Add(mic.ProductName);
+            }
+
+            if (comboBoxMicrophone.Items.Count > 0)
+            {
+                comboBoxMicrophone.SelectedIndex = 0;
+            }
+            recordingPanel.Controls.Add(comboBoxMicrophone);
+
             btnRecordMicrophone.Click += (s, e) =>
             {
                 try
                 {
+                    if (comboBoxMicrophone.SelectedIndex < 0)
+                    {
+                        MessageBox.Show("Please select a microphone.", "No Microphone Selected",
+                            MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
                     int sampleRate = GetSelectedSampleRate();
-                    audioRecorder.StartRecordingMicrophone(sampleRate);
-                    AddToListBox($"Recording microphone at {sampleRate} Hz...");
+                    int selectedDeviceNumber = comboBoxMicrophone.SelectedIndex;
+
+                    // Verify the device is still valid
+                    if (!SystemAudioRecorder.IsValidDeviceNumber(selectedDeviceNumber))
+                    {
+                        MessageBox.Show("Selected microphone is no longer available.",
+                            "Device Unavailable", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        RefreshMicrophoneList(); // Helper method to refresh the list
+                        return;
+                    }
+
+                    audioRecorder.StartRecordingMicrophone(sampleRate, selectedDeviceNumber);
+                    AddToListBox($"Recording microphone ({comboBoxMicrophone.Text}) at {sampleRate} Hz...");
                     isRecorded = true;
 
                     // Disable all controls except stop recording
@@ -931,7 +1003,7 @@ namespace WavConvert4Amiga
             {
                 Text = "Stop Recording",
                 Size = new Size(150, 30),
-                Location = new Point(10, 50),
+                Location = new Point(10, 120),
                 Enabled = false
             };
             btnStopRecording.Click += async (s, e) =>
@@ -999,6 +1071,22 @@ namespace WavConvert4Amiga
 
             // Add the recording panel to the bottom panel
             panelBottom.Controls.Add(recordingPanel);
+        }
+
+        // Add this helper method to refresh the microphone list
+        private void RefreshMicrophoneList()
+        {
+            comboBoxMicrophone.Items.Clear();
+            var mics = SystemAudioRecorder.GetAvailableMicrophones();
+            foreach (var mic in mics)
+            {
+                comboBoxMicrophone.Items.Add(mic.ProductName);
+            }
+
+            if (comboBoxMicrophone.Items.Count > 0)
+            {
+                comboBoxMicrophone.SelectedIndex = 0;
+            }
         }
         private void PushUndo(byte[] data)
         {
@@ -1524,24 +1612,27 @@ namespace WavConvert4Amiga
             Label labelEffects = new Label
             {
                 Text = "Sound Effects",
-                Location = new Point(10, 10),
+                Location = new Point(0, 0),
                 AutoSize = true,
                 ForeColor = Color.FromArgb(255, 215, 0)
             };
             effectsPanel.Controls.Add(labelEffects);
 
             // Create effect buttons
-            var buttonY = 40;
+            var buttonY = 30;
             CreateEffectButton("Underwater Effect", new Point(10, buttonY), effectsPanel, ApplyUnderwaterEffect);
             CreateEffectButton("Robot Voice", new Point(150, buttonY), effectsPanel, ApplyRobotEffect);
 
-            buttonY += 40;
+            buttonY += 30;
             CreateEffectButton("High Pitch", new Point(10, buttonY), effectsPanel, ApplyHighPitchEffect);
             CreateEffectButton("Low Pitch", new Point(150, buttonY), effectsPanel, ApplyLowPitchEffect);
 
-            buttonY += 40;
+            buttonY += 30;
             CreateEffectButton("Echo Effect", new Point(10, buttonY), effectsPanel, ApplyEchoEffect);
-            CreateEffectButton("Reset Effects", new Point(150, buttonY), effectsPanel, ResetEffects);
+            CreateEffectButton("Vocal Remove", new Point(150, buttonY), effectsPanel, ApplyVocalRemovalEffect);
+
+            buttonY += 30;
+            CreateEffectButton("Reset Effects", new Point(10, buttonY), effectsPanel, ResetEffects);
             panelBottom.Controls.Add(effectsPanel);
         }
 
@@ -1621,6 +1712,11 @@ namespace WavConvert4Amiga
             {
                 MessageBox.Show($"Error applying effect: {ex.Message}", "Effect Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        private void ApplyVocalRemovalEffect(object sender, EventArgs e)
+        {
+            ApplyEffect(audioEffects.ApplyVocalRemoval, "vocal removal effect");
         }
 
         private void ApplyUnderwaterEffect(object sender, EventArgs e)
@@ -2516,7 +2612,7 @@ namespace WavConvert4Amiga
                     button.BackColor = Color.FromArgb(180, 190, 210);
                     button.FlatStyle = FlatStyle.Flat;
                     button.FlatAppearance.BorderColor = Color.FromArgb(100, 100, 100);
-                    button.Font = new Font("Consolas", 9f);
+                    button.Font = FontManager.GetMainFont(9f);
                 }
                 else if (control is Panel panel)
                 {
@@ -2527,13 +2623,13 @@ namespace WavConvert4Amiga
                 {
                     listBox.BackColor = Color.Black;
                     listBox.ForeColor = Color.FromArgb(180, 190, 210);
-                    listBox.Font = new Font("Consolas", 9f);
+                    listBox.Font = FontManager.GetMainFont(9f);
                 }
                 else if (control is ComboBox comboBox)
                 {
                     comboBox.BackColor = Color.Black;
                     comboBox.ForeColor = Color.FromArgb(180, 190, 210);
-                    comboBox.Font = new Font("Consolas", 9f);
+                    comboBox.Font = FontManager.GetMainFont(9f);
                 }
             }
         }
@@ -2654,7 +2750,7 @@ namespace WavConvert4Amiga
                 if (control is Label label)
                 {
                     label.ForeColor = Color.FromArgb(255, 215, 0); // Gold text
-                    label.Font = new Font("Consolas", 9f, System.Drawing.FontStyle.Bold);
+                    label.Font = FontManager.GetMainFont(9f, FontStyle.Bold);
                     label.BackColor = Color.Transparent;
                 }
             }

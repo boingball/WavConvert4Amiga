@@ -4,6 +4,7 @@ using NAudio.Wave;
 using System.Threading.Tasks;
 using NAudio.CoreAudioApi;
 using System.Diagnostics;
+using System.Collections.Generic;
 
 namespace WavConvert4Amiga
 {
@@ -16,12 +17,26 @@ namespace WavConvert4Amiga
         private int targetSampleRate;
         private TaskCompletionSource<bool> recordingComplete;
         private readonly object lockObject = new object();
+        private int currentDeviceNumber = 0;
+        private int deviceNumber = 0;
+        private int requestedSampleRate = 44100;
 
         public byte[] RecordedData { get; private set; }
         public byte[] ProcessedData { get; private set; } // This will store converted data
         public bool IsRecording { get; private set; }
         public WaveFormat CapturedFormat { get; private set; }
 
+        //Get a list of available microphones
+        public static List<WaveInCapabilities> GetAvailableMicrophones()
+        {
+            var mics = new List<WaveInCapabilities>();
+            for (int i = 0; i < WaveIn.DeviceCount; i++)
+            {
+                mics.Add(WaveIn.GetCapabilities(i));
+            }
+            return mics;
+        }
+        
         public void StartRecordingSystemSound(int requestedSampleRate)
         {
             if (IsRecording) return;
@@ -95,16 +110,18 @@ namespace WavConvert4Amiga
             }
         }
 
-        public void StartRecordingMicrophone(int requestedSampleRate)
+        public void StartRecordingMicrophone(int requestedSampleRate, int deviceNumber)
         {
             if (IsRecording) return;
 
             try
             {
+                currentDeviceNumber = deviceNumber;
                 recordingComplete = new TaskCompletionSource<bool>();
 
                 // Always record at high quality
                 waveIn = new WaveInEvent();
+                waveIn.DeviceNumber = deviceNumber; // Set the selected device
                 waveIn.WaveFormat = new WaveFormat(44100, 16, 1); // High quality format
                 CapturedFormat = waveIn.WaveFormat;
 
@@ -161,6 +178,22 @@ namespace WavConvert4Amiga
                 CleanupResources();
                 throw;
             }
+        }
+
+        // Helper method to validate device number
+        public static bool IsValidDeviceNumber(int deviceNumber)
+        {
+            return deviceNumber >= 0 && deviceNumber < WaveIn.DeviceCount;
+        }
+
+        // Method to get current device info
+        public static WaveInCapabilities GetDeviceInfo(int deviceNumber)
+        {
+            if (IsValidDeviceNumber(deviceNumber))
+            {
+                return WaveIn.GetCapabilities(deviceNumber);
+            }
+            throw new ArgumentException("Invalid device number");
         }
 
         private void ProcessRecordingFile(string tempFile)

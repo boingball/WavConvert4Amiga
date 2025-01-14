@@ -14,6 +14,7 @@ namespace WavConvert4Amiga
         {
             SetStyle(ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer, true);
             BackColor = Color.FromArgb(180, 190, 210);
+            Font = FontManager.GetMainFont();
         }
 
         protected override void OnPaint(PaintEventArgs e)
