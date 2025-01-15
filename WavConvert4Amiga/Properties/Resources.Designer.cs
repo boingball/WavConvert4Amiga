@@ -73,6 +73,16 @@ namespace WavConvert4Amiga.Properties {
         /// <summary>
         ///   Looks up a localized resource of type System.Byte[].
         /// </summary>
+        internal static byte[] amiga_wb1_mini_hand {
+            get {
+                object obj = ResourceManager.GetObject("amiga_wb1_mini_hand", resourceCulture);
+                return ((byte[])(obj));
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized resource of type System.Byte[].
+        /// </summary>
         internal static byte[] amiga_wb1_mini_normal {
             get {
                 object obj = ResourceManager.GetObject("amiga_wb1_mini_normal", resourceCulture);

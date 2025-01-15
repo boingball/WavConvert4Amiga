@@ -121,6 +121,9 @@
   <data name="amiga_wb1_mini_busy" type="System.Resources.ResXFileRef, System.Windows.Forms">
     <value>..\Resources\amiga_wb1_mini_busy.cur;System.Byte[], mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </data>
+  <data name="amiga_wb1_mini_hand" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\amiga_wb1_mini_hand.cur;System.Byte[], mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </data>
   <data name="amiga_wb1_mini_normal" type="System.Resources.ResXFileRef, System.Windows.Forms">
     <value>..\Resources\amiga_wb1_mini_normal.cur;System.Byte[], mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </data>

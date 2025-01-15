@@ -177,6 +177,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="Resources\WC4A_icon.png" />
+    <None Include="Resources\amiga_wb1_mini_hand.cur" />
     <Content Include="WC4A_icon.ico" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

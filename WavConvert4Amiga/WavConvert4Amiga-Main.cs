@@ -252,18 +252,22 @@ namespace WavConvert4Amiga
                 // Save cursor files
                 string normalPath = Path.Combine(tempDir, "normal.cur");
                 string busyPath = Path.Combine(tempDir, "busy.cur");
+                string handPath = Path.Combine(tempDir, "hand.cur");
 
                 File.WriteAllBytes(normalPath, Properties.Resources.amiga_wb1_mini_normal);
                 File.WriteAllBytes(busyPath, Properties.Resources.amiga_wb1_mini_busy);
+                File.WriteAllBytes(handPath, Properties.Resources.amiga_wb1_mini_hand);
 
                 // Load cursors using Windows API
                 IntPtr normalHandle = LoadCursorFromFile(normalPath);
                 IntPtr busyHandle = LoadCursorFromFile(busyPath);
+                IntPtr handHandle = LoadCursorFromFile(handPath);
 
                 if (normalHandle != IntPtr.Zero && busyHandle != IntPtr.Zero)
                 {
                     customCursors["normal"] = new Cursor(normalHandle);
                     customCursors["busy"] = new Cursor(busyHandle);
+                    customCursors["hand"] = new Cursor(handHandle);
 
                     // Set initial cursor
                     this.Cursor = customCursors["normal"];
@@ -278,6 +282,7 @@ namespace WavConvert4Amiga
                 {
                     File.Delete(normalPath);
                     File.Delete(busyPath);
+                    File.Delete(handPath);
                     Directory.Delete(tempDir);
                 }
                 catch
@@ -1911,6 +1916,7 @@ namespace WavConvert4Amiga
 
         private void panel1_DragEnter(object sender, DragEventArgs e)
         {
+            SetCustomCursor("hand");
             if (e.Data.GetDataPresent(DataFormats.FileDrop))
             {
                 e.Effect = DragDropEffects.Copy;
@@ -2828,6 +2834,18 @@ namespace WavConvert4Amiga
                 MessageBox.Show($"Error saving file: {ex.Message}", "Save Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
+
+        // Custom cursor handling for Drag Panel Area
+        private void panel1_MouseEnter(object sender, EventArgs e)
+        {
+            SetCustomCursor("hand");
+        }
+
+        private void panel1_MouseLeave(object sender, EventArgs e)
+        {
+            SetCustomCursor("normal");
+        }
+
     }
     }
 

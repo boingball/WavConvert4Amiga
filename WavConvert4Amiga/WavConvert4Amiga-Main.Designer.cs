@@ -66,6 +66,10 @@
             this.panel1.TabIndex = 2;
             this.panel1.DragDrop += new System.Windows.Forms.DragEventHandler(this.panel1_DragDrop);
             this.panel1.DragEnter += new System.Windows.Forms.DragEventHandler(this.panel1_DragEnter);
+            this.panel1.MouseEnter += new System.EventHandler(this.panel1_MouseEnter);
+            this.panel1.MouseLeave += new System.EventHandler(this.panel1_MouseLeave);
+            this.panel1.MouseHover += new System.EventHandler(this.panel1_MouseEnter);
+            this.panel1.MouseMove += new System.Windows.Forms.MouseEventHandler(this.panel1_MouseEnter);
             // 
             // label2
             // 
@@ -74,9 +78,13 @@
             this.label2.Location = new System.Drawing.Point(8, 0);
             this.label2.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             this.label2.Name = "label2";
-            this.label2.Size = new System.Drawing.Size(422, 24);
+            this.label2.Size = new System.Drawing.Size(515, 29);
             this.label2.TabIndex = 0;
             this.label2.Text = "Drop WAV Files Here / Click to Load";
+            this.label2.MouseEnter += new System.EventHandler(this.panel1_MouseEnter);
+            this.label2.MouseLeave += new System.EventHandler(this.panel1_MouseLeave);
+            this.label2.MouseHover += new System.EventHandler(this.panel1_MouseEnter);
+            this.label2.MouseMove += new System.Windows.Forms.MouseEventHandler(this.panel1_MouseEnter);
             // 
             // listBoxFiles
             // 
@@ -105,7 +113,7 @@
             this.checkBoxEnable8SVX.Location = new System.Drawing.Point(246, 59);
             this.checkBoxEnable8SVX.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.checkBoxEnable8SVX.Name = "checkBoxEnable8SVX";
-            this.checkBoxEnable8SVX.Size = new System.Drawing.Size(73, 24);
+            this.checkBoxEnable8SVX.Size = new System.Drawing.Size(77, 24);
             this.checkBoxEnable8SVX.TabIndex = 5;
             this.checkBoxEnable8SVX.Text = "8SVX";
             this.checkBoxEnable8SVX.UseVisualStyleBackColor = false;
@@ -116,7 +124,7 @@
             this.checkBoxMoveOriginal.Location = new System.Drawing.Point(1153, 62);
             this.checkBoxMoveOriginal.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.checkBoxMoveOriginal.Name = "checkBoxMoveOriginal";
-            this.checkBoxMoveOriginal.Size = new System.Drawing.Size(155, 24);
+            this.checkBoxMoveOriginal.Size = new System.Drawing.Size(159, 24);
             this.checkBoxMoveOriginal.TabIndex = 6;
             this.checkBoxMoveOriginal.Text = "Move Original File";
             this.checkBoxMoveOriginal.UseVisualStyleBackColor = true;
@@ -137,7 +145,7 @@
             this.checkBoxLowPass.Location = new System.Drawing.Point(764, 14);
             this.checkBoxLowPass.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.checkBoxLowPass.Name = "checkBoxLowPass";
-            this.checkBoxLowPass.Size = new System.Drawing.Size(138, 24);
+            this.checkBoxLowPass.Size = new System.Drawing.Size(142, 24);
             this.checkBoxLowPass.TabIndex = 9;
             this.checkBoxLowPass.Text = "Low Pass Filter";
             this.checkBoxLowPass.UseVisualStyleBackColor = false;
@@ -149,7 +157,7 @@
             this.checkBoxAutoConvert.Location = new System.Drawing.Point(1019, 62);
             this.checkBoxAutoConvert.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.checkBoxAutoConvert.Name = "checkBoxAutoConvert";
-            this.checkBoxAutoConvert.Size = new System.Drawing.Size(124, 24);
+            this.checkBoxAutoConvert.Size = new System.Drawing.Size(128, 24);
             this.checkBoxAutoConvert.TabIndex = 10;
             this.checkBoxAutoConvert.Text = "Auto Convert";
             this.checkBoxAutoConvert.UseVisualStyleBackColor = false;
