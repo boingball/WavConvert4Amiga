@@ -1506,8 +1506,10 @@ namespace WavConvert4Amiga
                     currentPcmData = AmplifyAndConvert(originalPcmData, amplificationFactor);
 
                     // Update waveform display
-                    //waveformViewer.SetAudioData(currentPcmData);
-                    ProcessSampleRateChange();
+                    //ProcessSampleRateChange();
+                    //Best way to do this  - wasn't working in v1.0 but now it is
+                    waveformViewer.SetAudioData(currentPcmData);
+
                     if (oldStart >= 0 && oldEnd >= 0)
                     {
                         waveformViewer.RestoreLoopPoints(oldStart, oldEnd);
@@ -1819,7 +1821,6 @@ namespace WavConvert4Amiga
             // Stop any current playback
             StopPreview();
             if (originalPcmData == null && !isRecorded) return;
-            //if (originalPcmData == null && !string.IsNullOrEmpty(lastLoadedFilePath)) return;
             try
             {
                 int targetSampleRate = GetSelectedSampleRate();
