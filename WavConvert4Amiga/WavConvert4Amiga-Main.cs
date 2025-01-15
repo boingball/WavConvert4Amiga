@@ -1922,6 +1922,7 @@ namespace WavConvert4Amiga
 
         private void panel1_DragDrop(object sender, DragEventArgs e)
         {
+            SetCustomCursor("busy");
             try
             {
                 // Get the list of files dropped
@@ -1932,6 +1933,8 @@ namespace WavConvert4Amiga
                     // Check if the file is a WAV file
                     if (Path.GetExtension(file).ToLower() == ".wav")
                     {
+                        StopPreview();
+                        trackBarAmplify.Value = 100;
                         // Process the WAV file
                         ProcessWaveFile(file);
                     }
@@ -1946,6 +1949,10 @@ namespace WavConvert4Amiga
             {
                 // Handle unexpected errors during drag-and-drop
                 MessageBox.Show($"An error occurred while processing the dropped files: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                SetCustomCursor("normal");
             }
         }
 
@@ -2019,6 +2026,9 @@ namespace WavConvert4Amiga
             catch (Exception ex)
             {
                 MessageBox.Show($"Error processing file: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
                 SetCustomCursor("normal");
             }
         }
