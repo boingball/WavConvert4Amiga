@@ -14,20 +14,20 @@ namespace WavConvert4Amiga
         {
             float alpha = cutoffFrequency / (cutoffFrequency + sampleRate);
             float[] filteredSamples = new float[input.Length];
-            float lastValue = (input[0] - 128) / 128.0f; // Convert to normalized float (-1 to 1)
+            float lastValue = (input[0] - 128) / 128.0f;
 
             for (int i = 0; i < input.Length; i++)
             {
-                float currentSample = (input[i] - 128) / 128.0f; // Convert to normalized float
-                lastValue = lastValue + alpha * (currentSample - lastValue); // Apply filter
-                filteredSamples[i] = lastValue; // Store filtered value
+                float currentSample = (input[i] - 128) / 128.0f;
+                lastValue = lastValue + alpha * (currentSample - lastValue);
+                filteredSamples[i] = lastValue;
             }
 
-            // Convert filteredSamples back to PCM bytes
-            byte[] output = new byte[filteredSamples.Length];
-            for (int i = 0; i < filteredSamples.Length; i++)
+            // Convert back to PCM bytes
+            byte[] output = new byte[input.Length];
+            for (int i = 0; i < input.Length; i++)
             {
-                output[i] = (byte)Math.Max(0, Math.Min(255, (filteredSamples[i] * 128.0f) + 128));
+                output[i] = (byte)Math.Max(0, Math.Min(255, (filteredSamples[i] * 128.0f) + 128.0f));
             }
 
             return output;
@@ -38,25 +38,44 @@ namespace WavConvert4Amiga
             if (factor == 1.0f) return input;
 
             byte[] output = new byte[input.Length];
+
+            // Process each sample
             for (int i = 0; i < input.Length; i++)
             {
+                // Convert unsigned PCM (0-255) to signed float (-1.0 to 1.0)
                 float sample = (input[i] - 128) / 128.0f;
+
+                // Apply amplification
                 sample *= factor;
+
+                // Hard limiting to prevent clipping
                 sample = Math.Max(-1.0f, Math.Min(1.0f, sample));
-                output[i] = (byte)Math.Max(0, Math.Min(255, (sample * 128.0f) + 128));
+
+                // Convert back to unsigned PCM (0-255)
+                output[i] = (byte)Math.Max(0, Math.Min(255, (sample * 128.0f) + 128.0f));
             }
 
             return output;
         }
 
+
         public byte[] ResampleAudio(byte[] input, int targetSampleRate, WaveFormat originalFormat)
         {
-            using (var memoryStream = new MemoryStream(input))
-            using (var waveStream = new RawSourceWaveStream(memoryStream, originalFormat))
-            using (var resampler = new MediaFoundationResampler(waveStream, new WaveFormat(targetSampleRate, originalFormat.BitsPerSample, originalFormat.Channels)))
+            using (var memoryStream = new MemoryStream())
             {
-                resampler.ResamplerQuality = 60;
-                return ReadFully(resampler);
+                using (var sourceMs = new MemoryStream(input))
+                using (var reader = new RawSourceWaveStream(sourceMs, originalFormat))
+                using (var resampler = new MediaFoundationResampler(reader, new WaveFormat(targetSampleRate, 8, 1)))
+                {
+                    resampler.ResamplerQuality = 60;
+                    byte[] buffer = new byte[4096];
+                    int read;
+                    while ((read = resampler.Read(buffer, 0, buffer.Length)) > 0)
+                    {
+                        memoryStream.Write(buffer, 0, read);
+                    }
+                }
+                return memoryStream.ToArray();
             }
         }
 
