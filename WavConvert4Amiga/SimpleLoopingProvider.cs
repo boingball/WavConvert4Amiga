@@ -1,8 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.IO;
 using NAudio.Wave;
 
 namespace WavConvert4Amiga
@@ -80,6 +77,7 @@ namespace WavConvert4Amiga
         private readonly int loopEndByte;
         private long position;
         private bool isLooping;
+        private WaveFormat waveFormat;
 
         public LoopingWaveProvider(IWaveProvider sourceProvider, int loopStartByte, int loopEndByte)
         {
@@ -88,9 +86,10 @@ namespace WavConvert4Amiga
             this.loopEndByte = loopEndByte;
             this.position = 0;
             this.isLooping = true;
+            this.waveFormat = sourceProvider.WaveFormat;
         }
 
-        public WaveFormat WaveFormat => sourceProvider.WaveFormat;
+        public WaveFormat WaveFormat => waveFormat;
 
         public int Read(byte[] buffer, int offset, int count)
         {

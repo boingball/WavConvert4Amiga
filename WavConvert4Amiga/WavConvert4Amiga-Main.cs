@@ -6,8 +6,8 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Text;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using System.Xml.Linq;
 using CSCore.XAudio2;
@@ -1364,29 +1364,22 @@ namespace WavConvert4Amiga
 
                 StopPreview();
 
-                string selectedSampleRate = comboBoxSampleRate.Text;
-                string sampleRateString = new string(selectedSampleRate.TakeWhile(char.IsDigit).ToArray());
-                if (!int.TryParse(sampleRateString, out int targetSampleRate) || targetSampleRate <= 0)
-                {
-                    MessageBox.Show("Invalid sample rate selected.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    return;
-                }
-
                 // Extract the section to play
                 byte[] sectionToPlay = new byte[end - start];
                 Array.Copy(currentPcmData, start, sectionToPlay, 0, end - start);
 
                 if (checkBoxLowPass.Checked)
                 {
-                    float cutoffFrequency = targetSampleRate * 0.45f;
-                    sectionToPlay = waveformProcessor.ApplyLowPassFilter(sectionToPlay, targetSampleRate, cutoffFrequency);
+                    float cutoffFrequency = currentSampleRate * 0.45f;
+                    sectionToPlay = waveformProcessor.ApplyLowPassFilter(sectionToPlay, currentSampleRate, cutoffFrequency);
                 }
 
+                // Create streams with current sample rate
                 audioStream = new MemoryStream(sectionToPlay);
-                var waveFormat = new WaveFormat(targetSampleRate, 8, 1);
+                var waveFormat = new WaveFormat(currentSampleRate, 8, 1);
                 waveStream = new RawSourceWaveStream(audioStream, waveFormat);
 
-                // Create the looping provider
+                // Create looping provider
                 var loopProvider = new LoopingWaveProvider(waveStream, 0, sectionToPlay.Length);
                 currentWaveProvider = loopProvider;
 
@@ -1398,9 +1391,8 @@ namespace WavConvert4Amiga
                 currentPreviewStart = start;
                 currentPreviewEnd = end;
 
-                // Configure waveform viewer for playback
-                waveformViewer.SetSampleRate(targetSampleRate);
-                waveformViewer.SetPlayheadPosition(start);  // Use new method to set initial position
+                // Configure waveform viewer
+                waveformViewer.SetPlayheadPosition(start);
                 waveformViewer.StartPlayback();
 
                 waveOut.Play();
@@ -1408,11 +1400,11 @@ namespace WavConvert4Amiga
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error previewing audio: {ex.Message}", "Preview Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"Error previewing audio: {ex.Message}", "Preview Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
                 StopPreview();
             }
         }
-
         private void StopPreview(object sender = null, EventArgs e = null)
         {
             if (waveOut != null)
@@ -2136,26 +2128,80 @@ namespace WavConvert4Amiga
 
         private void comboBoxSampleRate_SelectedIndexChanged(object sender, EventArgs e)
         {
+            if (originalPcmData == null) return;
+
             string selectedRate = comboBoxSampleRate.Text;
             string sampleRateString = new string(selectedRate.TakeWhile(char.IsDigit).ToArray());
 
-            if (int.TryParse(sampleRateString, out int rate))
+            if (int.TryParse(sampleRateString, out int targetSampleRate))
             {
-                AddToListBox($"Changing sample rate to {rate}Hz...");
+                bool wasPlaying = isPlaying;
+                var (oldStart, oldEnd) = waveformViewer.GetLoopPoints();
+
+                // Stop any current playback
+                StopPreview();
+
+                try
+                {
+                    // Create source stream with original data
+                    using (var sourceMs = new MemoryStream())
+                    {
+                        var sourceFormat = new WaveFormat(originalSampleRate, 8, 1);
+                        using (var writer = new WaveFileWriter(sourceMs, sourceFormat))
+                        {
+                            writer.Write(originalPcmData, 0, originalPcmData.Length);
+                            writer.Flush();
+                            sourceMs.Position = 0;
+
+                            // Resample to new rate
+                            using (var reader = new WaveFileReader(sourceMs))
+                            using (var resampler = new MediaFoundationResampler(
+                                reader, new WaveFormat(targetSampleRate, 8, 1)))
+                            {
+                                resampler.ResamplerQuality = 60;
+                                using (var outStream = new MemoryStream())
+                                {
+                                    byte[] buffer = new byte[4096];
+                                    int read;
+                                    while ((read = resampler.Read(buffer, 0, buffer.Length)) > 0)
+                                    {
+                                        outStream.Write(buffer, 0, read);
+                                    }
+
+                                    // Update current PCM data with resampled version
+                                    currentPcmData = outStream.ToArray();
+                                }
+                            }
+                        }
+                    }
+
+                    // Update waveform display
+                    waveformViewer.SetAudioData(currentPcmData);
+
+                    // Scale and restore loop points if they existed
+                    if (oldStart >= 0 && oldEnd >= 0)
+                    {
+                        float scaleFactor = (float)targetSampleRate / originalSampleRate;
+                        int newStart = (int)(oldStart * scaleFactor);
+                        int newEnd = (int)(oldEnd * scaleFactor);
+                        waveformViewer.RestoreLoopPoints(newStart, newEnd);
+
+                        // Resume playback if it was playing
+                        if (wasPlaying)
+                        {
+                            StartPreview(newStart, newEnd);
+                        }
+                    }
+
+                    AddToListBox($"Resampled to {targetSampleRate}Hz");
+                    currentSampleRate = targetSampleRate;
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error resampling audio: {ex.Message}", "Resampling Error",
+                        MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
             }
-
-            // Stop any current playback and processing
-            StopPreview();
-
-            // Make sure we have valid data to process
-            if (processedPcmData == null && currentPcmData != null)
-            {
-                processedPcmData = new byte[currentPcmData.Length];
-                Array.Copy(currentPcmData, processedPcmData, currentPcmData.Length);
-            }
-
-            // Process the sample rate change using processed data
-            ProcessWithCurrentSampleRate();
         }
 
 
@@ -2305,10 +2351,10 @@ namespace WavConvert4Amiga
                 int targetSampleRate = GetSelectedSampleRate();
 
                 // Process audio - now using tuple return
-              //  var result = audioProcessor.ProcessToSampleRate(targetSampleRate);
+               // var result = audioProcessor.ProcessToSampleRate(targetSampleRate);
                 currentPcmData = audioProcessor.ProcessAudio(targetSampleRate);
-                currentPcmData = result.processedData;
-                float timeScaleFactor = result.timeScaleFactor;
+               // currentPcmData = result.processedData;
+               // float timeScaleFactor = result.timeScaleFactor;
 
                 // Rest of the method remains the same...
             }

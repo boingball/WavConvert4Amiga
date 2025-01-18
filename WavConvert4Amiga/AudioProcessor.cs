@@ -1,7 +1,7 @@
 ﻿using NAudio.Wave;
-using System.Collections.Generic;
-using System.IO;
 using System;
+using System.IO;
+using System.Collections.Generic;
 
 public class AudioProcessor
 {
@@ -12,7 +12,6 @@ public class AudioProcessor
     private float amplificationFactor = 1.0f;
     private List<(int start, int end)> cutRegions = new List<(int start, int end)>();
 
-    // Initialize or reset the processor with new data
     public void SetOriginalData(byte[] data, WaveFormat format)
     {
         if (data == null || format == null)
@@ -29,7 +28,11 @@ public class AudioProcessor
         cutRegions.Clear();
     }
 
-    // Process the audio data with current settings
+    public byte[] GetCurrentProcessedData()
+    {
+        return workingData;
+    }
+
     public byte[] ProcessAudio(int targetSampleRate)
     {
         if (originalData == null || originalFormat == null)
@@ -37,34 +40,53 @@ public class AudioProcessor
 
         try
         {
-            // Start from original data for resampling
-            byte[] currentData = new byte[originalData.Length];
-            Buffer.BlockCopy(originalData, 0, currentData, 0, originalData.Length);
-
-            // Step 1: Resample if needed
-            if (targetSampleRate != originalFormat.SampleRate)
+            // Create a MemoryStream for the source audio
+            using (var sourceMs = new MemoryStream())
             {
-                currentData = ResampleAudio(currentData, targetSampleRate);
+                var sourceFormat = new WaveFormat(originalFormat.SampleRate, 8, 1);
+                using (var writer = new WaveFileWriter(sourceMs, sourceFormat))
+                {
+                    writer.Write(originalData, 0, originalData.Length);
+                    writer.Flush();
+                    sourceMs.Position = 0;
+
+                    // Use MediaFoundationResampler for high-quality resampling
+                    using (var reader = new WaveFileReader(sourceMs))
+                    using (var resampler = new MediaFoundationResampler(reader, new WaveFormat(targetSampleRate, 8, 1)))
+                    {
+                        resampler.ResamplerQuality = 60; // High quality
+                        using (var outStream = new MemoryStream())
+                        {
+                            byte[] buffer = new byte[4096];
+                            int read;
+                            while ((read = resampler.Read(buffer, 0, buffer.Length)) > 0)
+                            {
+                                outStream.Write(buffer, 0, read);
+                            }
+                            byte[] resampledData = outStream.ToArray();
+
+                            // Apply cuts if any
+                            if (cutRegions.Count > 0)
+                            {
+                                resampledData = ApplyCuts(resampledData, targetSampleRate);
+                            }
+
+                            // Apply amplification
+                            if (amplificationFactor != 1.0f)
+                            {
+                                resampledData = ApplyAmplification(resampledData);
+                            }
+
+                            // Update working data
+                            workingData = new byte[resampledData.Length];
+                            Buffer.BlockCopy(resampledData, 0, workingData, 0, resampledData.Length);
+                            currentSampleRate = targetSampleRate;
+
+                            return resampledData;
+                        }
+                    }
+                }
             }
-
-            // Step 2: Apply cuts if any
-            if (cutRegions.Count > 0)
-            {
-                currentData = ApplyCuts(currentData, targetSampleRate);
-            }
-
-            // Step 3: Apply amplification
-            if (amplificationFactor != 1.0f)
-            {
-                currentData = ApplyAmplification(currentData);
-            }
-
-            // Update working data
-            workingData = new byte[currentData.Length];
-            Buffer.BlockCopy(currentData, 0, workingData, 0, currentData.Length);
-            currentSampleRate = targetSampleRate;
-
-            return currentData;
         }
         catch (Exception ex)
         {
@@ -72,34 +94,9 @@ public class AudioProcessor
         }
     }
 
-    private byte[] ResampleAudio(byte[] data, int targetSampleRate)
+    public void SetAmplification(float factor)
     {
-        using (var sourceMs = new MemoryStream())
-        {
-            var sourceFormat = new WaveFormat(currentSampleRate, 8, 1);
-            using (var writer = new WaveFileWriter(sourceMs, sourceFormat))
-            {
-                writer.Write(data, 0, data.Length);
-                writer.Flush();
-                sourceMs.Position = 0;
-
-                using (var reader = new WaveFileReader(sourceMs))
-                using (var resampler = new MediaFoundationResampler(reader, new WaveFormat(targetSampleRate, 8, 1)))
-                {
-                    resampler.ResamplerQuality = 60;
-                    using (var outStream = new MemoryStream())
-                    {
-                        byte[] buffer = new byte[4096];
-                        int read;
-                        while ((read = resampler.Read(buffer, 0, buffer.Length)) > 0)
-                        {
-                            outStream.Write(buffer, 0, read);
-                        }
-                        return outStream.ToArray();
-                    }
-                }
-            }
-        }
+        amplificationFactor = factor;
     }
 
     private byte[] ApplyCuts(byte[] data, int currentRate)
@@ -107,9 +104,10 @@ public class AudioProcessor
         if (cutRegions.Count == 0) return data;
 
         var scaledCuts = ScaleCutRegions(currentRate);
+        scaledCuts.Sort((a, b) => b.start.CompareTo(a.start)); // Sort in descending order
         byte[] result = data;
 
-        foreach (var cut in scaledCuts.OrderByDescending(c => c.start))
+        foreach (var cut in scaledCuts)
         {
             if (cut.start < 0 || cut.end > result.Length || cut.start >= cut.end)
                 continue;
@@ -152,10 +150,15 @@ public class AudioProcessor
     private List<(int start, int end)> ScaleCutRegions(int targetRate)
     {
         float scaleFactor = (float)targetRate / originalFormat.SampleRate;
-        return cutRegions.Select(cut => (
-            start: (int)(cut.start * scaleFactor),
-            end: (int)(cut.end * scaleFactor)
-        )).ToList();
+        var result = new List<(int start, int end)>();
+        foreach (var cut in cutRegions)
+        {
+            result.Add((
+                start: (int)(cut.start * scaleFactor),
+                end: (int)(cut.end * scaleFactor)
+            ));
+        }
+        return result;
     }
 
     public void AddCut(int start, int end)
@@ -169,16 +172,6 @@ public class AudioProcessor
         int originalEnd = (int)(end * scaleFactor);
 
         cutRegions.Add((originalStart, originalEnd));
-    }
-
-    public void SetAmplification(float factor)
-    {
-        amplificationFactor = factor;
-    }
-
-    public float GetTimeScaleFactor(int targetSampleRate)
-    {
-        return (float)targetSampleRate / originalFormat.SampleRate;
     }
 
     public void ClearCuts()
