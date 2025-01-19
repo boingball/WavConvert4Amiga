@@ -65,8 +65,10 @@ namespace WavConvert4Amiga
         private float amplificationFactor = 1.0f;
         private Dictionary<string, Cursor> customCursors = new Dictionary<string, Cursor>();
         private Font retroFont;
-        private Stack<byte[]> undoStack = new Stack<byte[]>();
-        private Stack<byte[]> redoStack = new Stack<byte[]>();
+      //  private Stack<byte[]> undoStack = new Stack<byte[]>();
+      //  private Stack<byte[]> redoStack = new Stack<byte[]>();
+        private Stack<AudioState> undoStack = new Stack<AudioState>();
+        private Stack<AudioState> redoStack = new Stack<AudioState>();
         private const int MAX_UNDO_STEPS = 20; // Limit memory usage
         private bool isRecorded = false;
 
@@ -85,6 +87,15 @@ namespace WavConvert4Amiga
                 {"E-3", (20864, 21056)}, {"F-3", (22168, 22372)}, {"F#3", (23489, 23706)}, {"G-3", (24803, 25032)},
                 {"G#3", (26273, 26515)}, {"A-3", (27928, 28185)}, {"A#3", (29557, 29830)}, {"B-3", (31388, 31677)}
          };
+
+        private AudioState CreateCurrentState()
+        {
+            string selectedRate = comboBoxSampleRate.Text;
+            string sampleRateString = new string(selectedRate.TakeWhile(char.IsDigit).ToArray());
+            int sampleRate = int.TryParse(sampleRateString, out int rate) ? rate : 8363;
+
+            return new AudioState(currentPcmData, sampleRate);
+        }
 
         public MainForm()
         {
@@ -725,8 +736,15 @@ namespace WavConvert4Amiga
             PushRedo(currentPcmData);
 
             // Restore previous state
-            currentPcmData = undoStack.Pop();
+            var previousState = undoStack.Pop();
+            currentPcmData = previousState.AudioData;
+
+            // Update sample rate in UI
+            comboBoxSampleRate.Text = $"{previousState.SampleRate}Hz";
+
+            // Update waveform display
             waveformViewer.SetAudioData(currentPcmData);
+            waveformViewer.SetSampleRate(previousState.SampleRate);
 
             // Update UI state
             UpdateEditButtonStates();
@@ -736,6 +754,8 @@ namespace WavConvert4Amiga
             {
                 StopPreview();
             }
+
+            AddToListBox($"Undo: Restored state with sample rate {previousState.SampleRate}Hz");
         }
 
         private void BtnPreviewLoop_Click(object sender, EventArgs e)
@@ -1095,16 +1115,13 @@ namespace WavConvert4Amiga
         }
         private void PushUndo(byte[] data)
         {
-            // Create a copy of the data
-            byte[] copy = new byte[data.Length];
-            Array.Copy(data, copy, data.Length);
-
-            undoStack.Push(copy);
+            var state = CreateCurrentState();
+            undoStack.Push(state);
 
             // Limit stack size
             if (undoStack.Count > MAX_UNDO_STEPS)
             {
-                var tempStack = new Stack<byte[]>();
+                var tempStack = new Stack<AudioState>();
                 for (int i = 0; i < MAX_UNDO_STEPS; i++)
                 {
                     tempStack.Push(undoStack.Pop());
@@ -1121,8 +1138,15 @@ namespace WavConvert4Amiga
             PushUndo(currentPcmData);
 
             // Restore redo state
-            currentPcmData = redoStack.Pop();
+            var redoState = redoStack.Pop();
+            currentPcmData = redoState.AudioData;
+
+            // Update sample rate in UI
+            comboBoxSampleRate.Text = $"{redoState.SampleRate}Hz";
+
+            // Update waveform display
             waveformViewer.SetAudioData(currentPcmData);
+            waveformViewer.SetSampleRate(redoState.SampleRate);
 
             // Update UI state
             UpdateEditButtonStates();
@@ -1132,20 +1156,19 @@ namespace WavConvert4Amiga
             {
                 StopPreview();
             }
+
+            AddToListBox($"Redo: Restored state with sample rate {redoState.SampleRate}Hz");
         }
 
         private void PushRedo(byte[] data)
         {
-            // Create a copy of the data
-            byte[] copy = new byte[data.Length];
-            Array.Copy(data, copy, data.Length);
-
-            redoStack.Push(copy);
+            var state = CreateCurrentState();
+            redoStack.Push(state);
 
             // Limit stack size
             if (redoStack.Count > MAX_UNDO_STEPS)
             {
-                var tempStack = new Stack<byte[]>();
+                var tempStack = new Stack<AudioState>();
                 for (int i = 0; i < MAX_UNDO_STEPS; i++)
                 {
                     tempStack.Push(redoStack.Pop());
