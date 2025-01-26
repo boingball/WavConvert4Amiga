@@ -21,7 +21,7 @@ namespace WavConvert4Amiga
 
     public partial class MainForm : Form
     {
-        private const string VERSION = "1.2.5";
+        private const string VERSION = "1.3";
         [DllImport("user32.dll")]
         private static extern IntPtr LoadCursorFromFile(string lpFileName);
         private SystemAudioRecorder audioRecorder;
@@ -335,10 +335,10 @@ namespace WavConvert4Amiga
         {
             using (OpenFileDialog openFileDialog = new OpenFileDialog())
             {
-                openFileDialog.Filter = "WAV files (*.wav)|*.wav|All files (*.*)|*.*";
+                openFileDialog.Filter = "Audio files (*.wav;*.8svx;*.iff)|*.wav;*.8svx;*.iff|WAV files (*.wav)|*.wav|IFF/8SVX files (*.8svx;*.iff)|*.8svx;*.iff|All files (*.*)|*.*";
                 openFileDialog.FilterIndex = 1;
                 openFileDialog.Multiselect = true;
-                openFileDialog.Title = "Select WAV Files";
+                openFileDialog.Title = "Select Audio Files";
 
                 if (openFileDialog.ShowDialog() == DialogResult.OK)
                 {
@@ -347,7 +347,8 @@ namespace WavConvert4Amiga
                     {
                         foreach (string filePath in openFileDialog.FileNames)
                         {
-                            if (Path.GetExtension(filePath).ToLower() == ".wav")
+                            string ext = Path.GetExtension(filePath).ToLower();
+                            if (ext == ".wav" || ext == ".8svx")
                             {
                                 StopPreview();
                                 trackBarAmplify.Value = 100;
@@ -355,7 +356,7 @@ namespace WavConvert4Amiga
                             }
                             else
                             {
-                                MessageBox.Show($"File {Path.GetFileName(filePath)} is not a WAV file.",
+                                MessageBox.Show($"Only WAV and IFF/8SVX files are supported.\nFile: {Path.GetFileName(filePath)}",
                                     "Invalid File", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                             }
                         }
@@ -367,6 +368,7 @@ namespace WavConvert4Amiga
                 }
             }
         }
+
 
         private void InitializeComboBox()
         {
@@ -1955,30 +1957,28 @@ namespace WavConvert4Amiga
             SetCustomCursor("busy");
             try
             {
-                // Get the list of files dropped
                 string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
 
                 foreach (string file in files)
                 {
-                    // Check if the file is a WAV file
-                    if (Path.GetExtension(file).ToLower() == ".wav")
+                    string ext = Path.GetExtension(file).ToLower();
+                    if (ext == ".wav" || ext == ".8svx" || ext == ".iff")
                     {
                         StopPreview();
                         trackBarAmplify.Value = 100;
-                        // Process the WAV file
                         ProcessWaveFile(file);
                     }
                     else
                     {
-                        // Show a warning if the file is not a WAV
-                        MessageBox.Show("Only WAV files are supported.", "Invalid File", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        MessageBox.Show($"Only WAV and IFF/8SVX files are supported.\nFile: {Path.GetFileName(file)}",
+                            "Invalid File", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     }
                 }
             }
             catch (Exception ex)
             {
-                // Handle unexpected errors during drag-and-drop
-                MessageBox.Show($"An error occurred while processing the dropped files: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"Error processing file: {ex.Message}", "Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
@@ -1991,26 +1991,52 @@ namespace WavConvert4Amiga
             SetCustomCursor("busy");
             try
             {
-                // Clear undo/redo stacks when loading new file
                 undoStack.Clear();
                 redoStack.Clear();
                 UpdateEditButtonStates();
                 lastLoadedFilePath = filePath;
 
-                // First load and store the original high quality data
-                using (var reader = new WaveFileReader(filePath))
+                string extension = Path.GetExtension(filePath).ToLower();
+                if (extension == ".8svx" || extension == ".iff")
                 {
-                    // Store original format
-                    originalFormat = reader.WaveFormat;
-                    originalSampleRate = reader.WaveFormat.SampleRate;
+                    // Try loading as IFF/8SVX
+                    using (var reader = new BinaryReader(File.OpenRead(filePath)))
+                    {
+                        // Check FORM header
+                        string formType = new string(reader.ReadChars(4));
+                        if (formType != "FORM")
+                            throw new InvalidDataException("Not a valid IFF file");
 
-                    // Read the original data
-                    byte[] originalData = new byte[reader.Length];
-                    reader.Read(originalData, 0, originalData.Length);
-                    originalPcmData = originalData;
+                        reader.BaseStream.Seek(4, SeekOrigin.Current); // Skip size
+                        string fileType = new string(reader.ReadChars(4));
+
+                        if (fileType != "8SVX")
+                            throw new InvalidDataException("Unsupported IFF format - only 8SVX is supported");
+
+                        // Reset stream position and load the file
+                        reader.BaseStream.Seek(0, SeekOrigin.Begin);
+                        var svxInfo = SVXLoader.Load8SVXFile(filePath);
+                        originalPcmData = svxInfo.AudioData;
+                        originalFormat = new WaveFormat(svxInfo.SampleRate, 8, 1);
+                        originalSampleRate = svxInfo.SampleRate;
+                    }
+                }
+                else if (extension == ".wav")
+                {
+                    using (var reader = new WaveFileReader(filePath))
+                    {
+                        originalFormat = reader.WaveFormat;
+                        originalSampleRate = reader.WaveFormat.SampleRate;
+                        originalPcmData = new byte[reader.Length];
+                        reader.Read(originalPcmData, 0, originalPcmData.Length);
+                    }
+                }
+                else
+                {
+                    throw new InvalidOperationException("Unsupported file format");
                 }
 
-                // Now immediately resample to target rate
+                // Process for target sample rate
                 int targetSampleRate = GetSelectedSampleRate();
                 using (var sourceMs = new MemoryStream())
                 {
@@ -2029,7 +2055,6 @@ namespace WavConvert4Amiga
                     }
                 }
 
-                // Update waveform display
                 if (currentPcmData != null)
                 {
                     waveformViewer.SetAudioData(currentPcmData);
@@ -2041,7 +2066,6 @@ namespace WavConvert4Amiga
                 AddToListBox($"Original sample rate: {originalSampleRate}Hz");
                 AddToListBox($"Converted to: {targetSampleRate}Hz");
 
-                // Process according to settings
                 if (checkBoxAutoConvert.Checked)
                 {
                     ProcessWithCurrentSampleRate();
@@ -2050,8 +2074,6 @@ namespace WavConvert4Amiga
                         MoveOriginalFile(filePath);
                     }
                 }
-
-                SetCustomCursor("normal");
             }
             catch (Exception ex)
             {
@@ -2062,6 +2084,7 @@ namespace WavConvert4Amiga
                 SetCustomCursor("normal");
             }
         }
+
 
         private void MoveOriginalFile(string filePath)
         {
@@ -2231,11 +2254,9 @@ namespace WavConvert4Amiga
         }
         private void ProcessWithCurrentSampleRate(object sender = null)
         {
-            // Stop any current playback before processing
             StopPreview();
             try
             {
-                // Get target sample rate
                 string selectedSampleRate = comboBoxSampleRate.Text;
                 string sampleRateString = new string(selectedSampleRate.TakeWhile(char.IsDigit).ToArray());
                 if (!int.TryParse(sampleRateString, out int targetSampleRate) || targetSampleRate <= 0)
@@ -2245,28 +2266,41 @@ namespace WavConvert4Amiga
                 }
 
                 byte[] pcmData;
-                // Store current loop points
                 var (oldStart, oldEnd) = waveformViewer.GetLoopPoints();
-
 
                 if (!string.IsNullOrEmpty(lastLoadedFilePath) && !isRecorded)
                 {
-                    using (var reader = new WaveFileReader(lastLoadedFilePath))
+                    string ext = Path.GetExtension(lastLoadedFilePath).ToLower();
+                    if (ext == ".8svx")
                     {
-                        // Store original format if not already stored
-                        if (originalFormat == null)
+                        var svxInfo = SVXLoader.Load8SVXFile(lastLoadedFilePath);
+                        using (var sourceMs = new MemoryStream())
                         {
-                            originalFormat = reader.WaveFormat;
-                            originalSampleRate = reader.WaveFormat.SampleRate;
+                            var format = new WaveFormat(svxInfo.SampleRate, 8, 1);
+                            using (var writer = new WaveFileWriter(sourceMs, format))
+                            {
+                                writer.Write(svxInfo.AudioData, 0, svxInfo.AudioData.Length);
+                                writer.Flush();
+                                sourceMs.Position = 0;
+
+                                using (var reader = new WaveFileReader(sourceMs))
+                                using (var resampler = new MediaFoundationResampler(reader, new WaveFormat(targetSampleRate, 8, 1)))
+                                {
+                                    resampler.ResamplerQuality = 60;
+                                    pcmData = GetPCMData(resampler);
+                                }
+                            }
                         }
-
-                        var targetFormat = new WaveFormat(targetSampleRate, 8, 1);
-
-                        // Create resampler with high quality settings
-                        using (var resampler = new MediaFoundationResampler(reader, targetFormat))
+                    }
+                    else
+                    {
+                        using (var reader = new WaveFileReader(lastLoadedFilePath))
                         {
-                            resampler.ResamplerQuality = 60; // High quality resampling
-                            pcmData = GetPCMData(resampler);
+                            using (var resampler = new MediaFoundationResampler(reader, new WaveFormat(targetSampleRate, 8, 1)))
+                            {
+                                resampler.ResamplerQuality = 60;
+                                pcmData = GetPCMData(resampler);
+                            }
                         }
                     }
                 }

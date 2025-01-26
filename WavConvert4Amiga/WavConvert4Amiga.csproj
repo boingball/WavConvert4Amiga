@@ -108,6 +108,7 @@
       <SubType>Component</SubType>
     </Compile>
     <Compile Include="SimpleLoopingProvider.cs" />
+    <Compile Include="SVXLoader.cs" />
     <Compile Include="SystemAudioRecorder.cs" />
     <Compile Include="WavConvert4Amiga-Main.cs">
       <SubType>Form</SubType>
