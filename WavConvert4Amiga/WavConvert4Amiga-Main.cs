@@ -891,6 +891,7 @@ namespace WavConvert4Amiga
             };
             btnRecordSystemSound.Click += (s, e) =>
             {
+                StopPreview();
                 try
                 {
                     int sampleRate = GetSelectedSampleRate();
@@ -976,6 +977,7 @@ namespace WavConvert4Amiga
 
             btnRecordMicrophone.Click += (s, e) =>
             {
+                StopPreview();
                 try
                 {
                     if (comboBoxMicrophone.SelectedIndex < 0)
