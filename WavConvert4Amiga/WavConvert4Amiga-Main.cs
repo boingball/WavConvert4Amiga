@@ -335,7 +335,7 @@ namespace WavConvert4Amiga
         {
             using (OpenFileDialog openFileDialog = new OpenFileDialog())
             {
-                openFileDialog.Filter = "Audio files (*.wav;*.8svx;*.iff)|*.wav;*.8svx;*.iff|WAV files (*.wav)|*.wav|IFF/8SVX files (*.8svx;*.iff)|*.8svx;*.iff|All files (*.*)|*.*";
+                openFileDialog.Filter = "All Supported Files|*.wav;*.8svx;*.iff|WAV files (*.wav)|*.wav|IFF/8SVX files (*.8svx;*.iff)|*.8svx;*.iff|ST Sample Files|*.*|All files (*.*)|*.*";
                 openFileDialog.FilterIndex = 1;
                 openFileDialog.Multiselect = true;
                 openFileDialog.Title = "Select Audio Files";
@@ -347,18 +347,9 @@ namespace WavConvert4Amiga
                     {
                         foreach (string filePath in openFileDialog.FileNames)
                         {
-                            string ext = Path.GetExtension(filePath).ToLower();
-                            if (ext == ".wav" || ext == ".8svx")
-                            {
-                                StopPreview();
-                                trackBarAmplify.Value = 100;
-                                ProcessWaveFile(filePath);
-                            }
-                            else
-                            {
-                                MessageBox.Show($"Only WAV and IFF/8SVX files are supported.\nFile: {Path.GetFileName(filePath)}",
-                                    "Invalid File", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                            }
+                            StopPreview();
+                            trackBarAmplify.Value = 100;
+                            ProcessWaveFile(filePath);
                         }
                     }
                     finally
@@ -368,6 +359,7 @@ namespace WavConvert4Amiga
                 }
             }
         }
+
 
 
         private void InitializeComboBox()
@@ -1961,18 +1953,9 @@ namespace WavConvert4Amiga
 
                 foreach (string file in files)
                 {
-                    string ext = Path.GetExtension(file).ToLower();
-                    if (ext == ".wav" || ext == ".8svx" || ext == ".iff")
-                    {
-                        StopPreview();
-                        trackBarAmplify.Value = 100;
-                        ProcessWaveFile(file);
-                    }
-                    else
-                    {
-                        MessageBox.Show($"Only WAV and IFF/8SVX files are supported.\nFile: {Path.GetFileName(file)}",
-                            "Invalid File", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    }
+                    StopPreview();
+                    trackBarAmplify.Value = 100;
+                    ProcessWaveFile(file);
                 }
             }
             catch (Exception ex)
@@ -1997,29 +1980,34 @@ namespace WavConvert4Amiga
                 lastLoadedFilePath = filePath;
 
                 string extension = Path.GetExtension(filePath).ToLower();
-                if (extension == ".8svx" || extension == ".iff")
+                if (string.IsNullOrEmpty(extension) || extension == ".8svx" || extension == ".iff")
                 {
-                    // Try loading as IFF/8SVX
-                    using (var reader = new BinaryReader(File.OpenRead(filePath)))
+                    SVXLoader.SVXInfo info;
+                    if (STSampleLoader.IsSTSample(filePath))
                     {
-                        // Check FORM header
-                        string formType = new string(reader.ReadChars(4));
-                        if (formType != "FORM")
-                            throw new InvalidDataException("Not a valid IFF file");
-
-                        reader.BaseStream.Seek(4, SeekOrigin.Current); // Skip size
-                        string fileType = new string(reader.ReadChars(4));
-
-                        if (fileType != "8SVX")
-                            throw new InvalidDataException("Unsupported IFF format - only 8SVX is supported");
-
-                        // Reset stream position and load the file
-                        reader.BaseStream.Seek(0, SeekOrigin.Begin);
-                        var svxInfo = SVXLoader.Load8SVXFile(filePath);
-                        originalPcmData = svxInfo.AudioData;
-                        originalFormat = new WaveFormat(svxInfo.SampleRate, 8, 1);
-                        originalSampleRate = svxInfo.SampleRate;
+                        info = STSampleLoader.LoadSTSample(filePath);
                     }
+                    else
+                    {
+                        using (var reader = new BinaryReader(File.OpenRead(filePath)))
+                        {
+                            string formType = new string(reader.ReadChars(4));
+                            if (formType != "FORM")
+                                throw new InvalidDataException("Not a valid IFF file");
+
+                            reader.BaseStream.Seek(4, SeekOrigin.Current);
+                            string fileType = new string(reader.ReadChars(4));
+
+                            if (fileType != "8SVX")
+                                throw new InvalidDataException("Unsupported IFF format - only 8SVX is supported");
+
+                            reader.BaseStream.Seek(0, SeekOrigin.Begin);
+                            info = SVXLoader.Load8SVXFile(filePath);
+                        }
+                    }
+                    originalPcmData = info.AudioData;
+                    originalFormat = new WaveFormat(info.SampleRate, 8, 1);
+                    originalSampleRate = info.SampleRate;
                 }
                 else if (extension == ".wav")
                 {
