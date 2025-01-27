@@ -63,6 +63,10 @@ namespace WavConvert4Amiga
         private TrackBar trackBarAmplify;
         private Label labelAmplify;
         private float amplificationFactor = 1.0f;
+        private float previousAmplificationFactor = 1.0f;  // Add this as a class field
+       // Store original data as floating-point intermediate values
+        private float[] originalFloatData = null; // Holds the original unprocessed data
+        private float[] workingFloatData = null; // Holds the current state after effects and adjustments
         private Dictionary<string, Cursor> customCursors = new Dictionary<string, Cursor>();
         private Font retroFont;
       //  private Stack<byte[]> undoStack = new Stack<byte[]>();
@@ -71,6 +75,7 @@ namespace WavConvert4Amiga
         private Stack<AudioState> redoStack = new Stack<AudioState>();
         private const int MAX_UNDO_STEPS = 20; // Limit memory usage
         private bool isRecorded = false;
+
 
         private Dictionary<string, (int pal, int ntsc)> ptNoteToHz = new Dictionary<string, (int pal, int ntsc)>()
         {
@@ -1513,8 +1518,42 @@ namespace WavConvert4Amiga
                 amplificationFactor = trackBarAmplify.Value / 100.0f;
                 labelAmplify.Text = $"Amplify: {trackBarAmplify.Value}%";
 
-                // Only reprocess if we have data
-                if (originalPcmData != null && originalPcmData.Length > 0)
+                //Need to check preview data here and try to process this first if we have some.
+                if (currentPcmData != null)
+                {
+
+                    // Create undo point
+                    byte[] prevData = new byte[currentPcmData.Length];
+                    Array.Copy(currentPcmData, prevData, currentPcmData.Length);
+                    PushUndo(prevData);
+
+                    // Store current playback state
+                    bool wasPlaying = isPlaying;
+                    var (oldStart, oldEnd) = waveformViewer.GetLoopPoints();
+
+                    // Stop any current playback
+                    if (wasPlaying)
+                    {
+                        StopPreview();
+                    }
+
+                    // Amplify and convert the PCM data
+
+                    currentPcmData = AmplifyAndConvert(currentPcmData, amplificationFactor);
+                    waveformViewer.SetAudioData(currentPcmData);
+
+                    if (oldStart >= 0 && oldEnd >= 0)
+                    {
+                        waveformViewer.RestoreLoopPoints(oldStart, oldEnd);
+                    }
+
+                    // Resume playback if we were playing
+                    if (wasPlaying && oldStart >= 0 && oldEnd >= 0)
+                    {
+                        StartPreview(oldStart, oldEnd);
+                    }
+
+                } else if (originalPcmData != null && originalPcmData.Length > 0)
                 {
                     // Store current playback state
                     bool wasPlaying = isPlaying;
@@ -1552,7 +1591,49 @@ namespace WavConvert4Amiga
         } // Add this method to apply amplification to audio data
         private byte[] AmplifyAndConvert(byte[] pcmData, float amplificationFactor)
         {
+
+            //Max Amplification is 5 - We start at 1% and go up to 5%
+
+
+
             if (pcmData == null || pcmData.Length == 0) return pcmData;
+
+            // Initialize buffers if not already set
+            if (originalFloatData == null || originalFloatData.Length != pcmData.Length)
+            {
+                originalFloatData = new float[pcmData.Length];
+                workingFloatData = new float[pcmData.Length];
+                for (int i = 0; i < pcmData.Length; i++)
+                {
+                    originalFloatData[i] = pcmData[i] - 128; // Convert to signed float range (-128 to 127)
+                    workingFloatData[i] = originalFloatData[i]; // Start with the original
+                }
+            }
+
+
+            if (currentPcmData != null && currentPcmData.Length > 0)
+            {
+                // Calculate the relative amplification factor
+                float relativeFactor = amplificationFactor / previousAmplificationFactor;
+
+                // Update the previous amplification factor for the next call
+                previousAmplificationFactor = amplificationFactor;
+
+                // Apply amplification to the working buffer
+                byte[] amplifiedData = new byte[pcmData.Length];
+                for (int i = 0; i < pcmData.Length; i++)
+                {
+                    float amplifiedSample = workingFloatData[i] * amplificationFactor;
+
+                    // Clamp to valid 8-bit range (-128 to 127)
+                    amplifiedSample = Math.Max(-128, Math.Min(127, amplifiedSample));
+
+                    // Convert back to unsigned 8-bit range (0 to 255)
+                    amplifiedData[i] = (byte)(amplifiedSample + 128);
+                }
+
+                return amplifiedData;
+            }
 
             try
             {
@@ -1743,6 +1824,7 @@ namespace WavConvert4Amiga
         private void ApplyVocalRemovalEffect(object sender, EventArgs e)
         {
             ApplyEffect(audioEffects.ApplyVocalRemoval, "vocal removal effect");
+
         }
 
         private void ApplyUnderwaterEffect(object sender, EventArgs e)
@@ -1775,6 +1857,7 @@ namespace WavConvert4Amiga
             if (originalPcmData == null) return;
             AddToListBox("Resetting effects...");
             SetCustomCursor("busy");
+
             try
             {
                 // Store playback state
