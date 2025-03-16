@@ -31,6 +31,7 @@ namespace WavConvert4Amiga
         private AudioEffectsProcessor audioEffects;
         private ComboBox comboBoxPTNote;
         private CheckBox checkBoxNTSC;
+        private CheckBox checkBox16BitWAV;
         private WaveOut waveOut;
         private WaveFormat originalFormat; // Store original format
         private MemoryStream audioStream;
@@ -119,12 +120,15 @@ namespace WavConvert4Amiga
             audioRecorder = new SystemAudioRecorder();
             InitializeRecordingButtons();
             InitializePTNoteComboBox();
+            InitializeCheckboxes();
             // Then style everything
             StyleLabels();
             StyleCheckbox(checkBoxEnable8SVX);
             StyleCheckbox(checkBoxLowPass);
             StyleCheckbox(checkBoxAutoConvert);
             StyleCheckbox(checkBoxMoveOriginal);
+            StyleCheckbox(checkBox16BitWAV);
+            StyleCheckbox(checkBoxNTSC);
             StyleTrackBar();  // Now the trackbar exists when we try to style it
 
             // Apply retro styling to the main form
@@ -321,6 +325,27 @@ namespace WavConvert4Amiga
             recordingIndicator.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             recordingIndicator.BringToFront(); // Make sure it's on top
             this.Controls.Add(recordingIndicator);
+        }
+        private void InitializeCheckboxes()
+        {
+            // Set up initial handling of checkbox state changes
+            checkBoxEnable8SVX.CheckedChanged += (s, e) =>
+            {
+                // If 8SVX is checked, uncheck 16-bit WAV
+                if (checkBoxEnable8SVX.Checked && checkBox16BitWAV.Checked)
+                {
+                    checkBox16BitWAV.Checked = false;
+                }
+            };
+
+            checkBox16BitWAV.CheckedChanged += (s, e) =>
+            {
+                // If 16-bit WAV is checked, uncheck 8SVX
+                if (checkBox16BitWAV.Checked && checkBoxEnable8SVX.Checked)
+                {
+                    checkBoxEnable8SVX.Checked = false;
+                }
+            };
         }
 
         private void SetCustomCursor(string cursorType)
@@ -2573,18 +2598,44 @@ namespace WavConvert4Amiga
                 }
                 else
                 {
+                    // For WAV, check if 16-bit is requested
                     outputPath = Path.Combine(directory, $"{fileName}_{sampleRate}Hz.wav");
+                    bool use16Bit = checkBox16BitWAV?.Checked ?? false;
 
-                    // Create WAV file
-                    var format = new WaveFormat(sampleRate, 8, 1);
-                    using (var writer = new WaveFileWriter(outputPath, format))
+                    // Create WAV file with appropriate bit depth
+                    WaveFormat format;
+                    if (use16Bit)
                     {
-                        writer.Write(pcmData, 0, pcmData.Length);
+                        format = new WaveFormat(sampleRate, 16, 1);
+                        // Convert 8-bit PCM data to 16-bit
+                        using (var writer = new WaveFileWriter(outputPath, format))
+                        {
+                            // Convert 8-bit unsigned to 16-bit signed
+                            short[] samples16Bit = new short[pcmData.Length];
+                            for (int i = 0; i < pcmData.Length; i++)
+                            {
+                                // Convert 8-bit (0-255) to 16-bit (-32768 to 32767)
+                                samples16Bit[i] = (short)((pcmData[i] - 128) * 256);
+                            }
+
+                            byte[] buffer = new byte[samples16Bit.Length * 2];
+                            Buffer.BlockCopy(samples16Bit, 0, buffer, 0, buffer.Length);
+                            writer.Write(buffer, 0, buffer.Length);
+                        }
+                    }
+                    else
+                    {
+                        // Existing 8-bit code
+                        format = new WaveFormat(sampleRate, 8, 1);
+                        using (var writer = new WaveFileWriter(outputPath, format))
+                        {
+                            writer.Write(pcmData, 0, pcmData.Length);
+                        }
                     }
                 }
 
-                // Check if file exists
-                if (File.Exists(outputPath))
+                    // Check if file exists
+                    if (File.Exists(outputPath))
                 {
                     var result = MessageBox.Show(
                         $"File {Path.GetFileName(outputPath)} already exists. Overwrite?",
@@ -2656,13 +2707,39 @@ namespace WavConvert4Amiga
                     }
                     else
                     {
-                        // Save as WAV file
-                        var format = new WaveFormat(sampleRate, 8, 1);
-                        using (var writer = new WaveFileWriter(saveDialog.FileName, format))
+                        // Save as WAV file - check if 16-bit is enabled
+                        bool use16Bit = checkBox16BitWAV.Checked;
+
+                        if (use16Bit)
                         {
-                            writer.Write(loopData, 0, loopData.Length);
+                            // Create 16-bit WAV
+                            var format = new WaveFormat(sampleRate, 16, 1);
+                            using (var writer = new WaveFileWriter(saveDialog.FileName, format))
+                            {
+                                // Convert 8-bit unsigned to 16-bit signed
+                                short[] samples16Bit = new short[loopData.Length];
+                                for (int i = 0; i < loopData.Length; i++)
+                                {
+                                    // Scale 8-bit range (0-255) to 16-bit range (-32768 to 32767)
+                                    samples16Bit[i] = (short)((loopData[i] - 128) * 256);
+                                }
+
+                                byte[] buffer = new byte[samples16Bit.Length * 2];
+                                Buffer.BlockCopy(samples16Bit, 0, buffer, 0, buffer.Length);
+                                writer.Write(buffer, 0, buffer.Length);
+                            }
+                            AddToListBox($"Saved loop section as 16-bit WAV: {Path.GetFileName(saveDialog.FileName)}");
                         }
-                        AddToListBox($"Saved loop section as WAV: {Path.GetFileName(saveDialog.FileName)}");
+                        else
+                        {
+                            // Save as 8-bit WAV (original code)
+                            var format = new WaveFormat(sampleRate, 8, 1);
+                            using (var writer = new WaveFileWriter(saveDialog.FileName, format))
+                            {
+                                writer.Write(loopData, 0, loopData.Length);
+                            }
+                            AddToListBox($"Saved loop section as 8-bit WAV: {Path.GetFileName(saveDialog.FileName)}");
+                        }
                     }
 
                     MessageBox.Show("Loop section saved successfully.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -2896,8 +2973,11 @@ namespace WavConvert4Amiga
         private void StyleCheckbox(CheckBox checkbox)
         {
             checkbox.FlatStyle = FlatStyle.Flat;
-            checkbox.BackColor = Color.FromArgb(180, 190, 210);
-            checkbox.ForeColor = Color.Black;
+            checkbox.BackColor = Color.FromArgb(60, 70, 100); // Dark blue like in the screenshot
+            checkbox.ForeColor = Color.FromArgb(255, 215, 0); // Gold color
+            checkbox.UseVisualStyleBackColor = false;
+            // Set bold font using your existing FontManager
+            checkbox.Font = FontManager.GetMainFont(9f, FontStyle.Bold);
         }
 
         private void StyleLabels()

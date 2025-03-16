@@ -41,6 +41,7 @@
             this.checkBoxAutoConvert = new System.Windows.Forms.CheckBox();
             this.btnManualConvert = new System.Windows.Forms.Button();
             this.panelBottom = new System.Windows.Forms.Panel();
+            this.checkBox16BitWAV = new System.Windows.Forms.CheckBox();
             this.panel1.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -109,14 +110,14 @@
             // checkBoxEnable8SVX
             // 
             this.checkBoxEnable8SVX.AutoSize = true;
-            this.checkBoxEnable8SVX.BackColor = System.Drawing.Color.Transparent;
+            this.checkBoxEnable8SVX.BackColor = System.Drawing.SystemColors.Control;
             this.checkBoxEnable8SVX.Location = new System.Drawing.Point(246, 59);
             this.checkBoxEnable8SVX.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.checkBoxEnable8SVX.Name = "checkBoxEnable8SVX";
             this.checkBoxEnable8SVX.Size = new System.Drawing.Size(77, 24);
             this.checkBoxEnable8SVX.TabIndex = 5;
             this.checkBoxEnable8SVX.Text = "8SVX";
-            this.checkBoxEnable8SVX.UseVisualStyleBackColor = false;
+            this.checkBoxEnable8SVX.UseVisualStyleBackColor = true;
             // 
             // checkBoxMoveOriginal
             // 
@@ -141,8 +142,8 @@
             // checkBoxLowPass
             // 
             this.checkBoxLowPass.AutoSize = true;
-            this.checkBoxLowPass.BackColor = System.Drawing.Color.Transparent;
-            this.checkBoxLowPass.Location = new System.Drawing.Point(764, 14);
+            this.checkBoxLowPass.BackColor = System.Drawing.SystemColors.Control;
+            this.checkBoxLowPass.Location = new System.Drawing.Point(759, 12);
             this.checkBoxLowPass.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.checkBoxLowPass.Name = "checkBoxLowPass";
             this.checkBoxLowPass.Size = new System.Drawing.Size(142, 24);
@@ -153,14 +154,14 @@
             // checkBoxAutoConvert
             // 
             this.checkBoxAutoConvert.AutoSize = true;
-            this.checkBoxAutoConvert.BackColor = System.Drawing.Color.Transparent;
+            this.checkBoxAutoConvert.BackColor = System.Drawing.SystemColors.Control;
             this.checkBoxAutoConvert.Location = new System.Drawing.Point(1019, 62);
             this.checkBoxAutoConvert.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.checkBoxAutoConvert.Name = "checkBoxAutoConvert";
             this.checkBoxAutoConvert.Size = new System.Drawing.Size(128, 24);
             this.checkBoxAutoConvert.TabIndex = 10;
             this.checkBoxAutoConvert.Text = "Auto Convert";
-            this.checkBoxAutoConvert.UseVisualStyleBackColor = false;
+            this.checkBoxAutoConvert.UseVisualStyleBackColor = true;
             // 
             // btnManualConvert
             // 
@@ -181,6 +182,16 @@
             this.panelBottom.Size = new System.Drawing.Size(1069, 275);
             this.panelBottom.TabIndex = 12;
             // 
+            // checkBox16BitWAV
+            // 
+            this.checkBox16BitWAV.AutoSize = true;
+            this.checkBox16BitWAV.Location = new System.Drawing.Point(329, 59);
+            this.checkBox16BitWAV.Name = "checkBox16BitWAV";
+            this.checkBox16BitWAV.Size = new System.Drawing.Size(116, 24);
+            this.checkBox16BitWAV.TabIndex = 11;
+            this.checkBox16BitWAV.Text = "16-bit WAV";
+            this.checkBox16BitWAV.UseVisualStyleBackColor = true;
+            // 
             // MainForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(9F, 20F);
@@ -200,6 +211,7 @@
             this.Controls.Add(this.checkBoxAutoConvert);
             this.Controls.Add(this.checkBoxLowPass);
             this.Controls.Add(this.checkBoxEnable8SVX);
+            this.Controls.Add(this.checkBox16BitWAV);
             this.DoubleBuffered = true;
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedSingle;
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
