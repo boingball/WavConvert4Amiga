@@ -21,7 +21,7 @@ namespace WavConvert4Amiga
 
     public partial class MainForm : Form
     {
-        private const string VERSION = "1.4";
+        private const string VERSION = "1.4a";
         [DllImport("user32.dll")]
         private static extern IntPtr LoadCursorFromFile(string lpFileName);
         private SystemAudioRecorder audioRecorder;
@@ -687,6 +687,9 @@ namespace WavConvert4Amiga
             // Stop any ongoing playback
             StopPreview();
 
+            // Clear all state
+            ClearAllState();
+
             // Clear the waveform data
             currentPcmData = null;
             originalPcmData = null;
@@ -1058,6 +1061,7 @@ namespace WavConvert4Amiga
             btnRecordSystemSound.Click += (s, e) =>
             {
                 StopPreview();
+                ClearAllState();
                 try
                 {
                     int sampleRate = GetSelectedSampleRate();
@@ -1144,6 +1148,7 @@ namespace WavConvert4Amiga
             btnRecordMicrophone.Click += (s, e) =>
             {
                 StopPreview();
+                ClearAllState();
                 try
                 {
                     if (comboBoxMicrophone.SelectedIndex < 0)
@@ -1230,6 +1235,7 @@ namespace WavConvert4Amiga
                             waveformViewer.Clear();
                             ProcessWithCurrentSampleRate();
                             waveformViewer.SetAudioData(currentPcmData);
+                            StoreInitialState();
                         }));
 
                         AddToListBox($"Recorded {currentPcmData.Length} bytes of audio data");
@@ -2331,9 +2337,10 @@ namespace WavConvert4Amiga
             SetCustomCursor("busy");
             try
             {
-                undoStack.Clear();
-                redoStack.Clear();
-                UpdateEditButtonStates();
+                ClearAllState();
+               // undoStack.Clear();
+               // redoStack.Clear();
+               // UpdateEditButtonStates();
                 lastLoadedFilePath = filePath;
 
                 string extension = Path.GetExtension(filePath).ToLower();
@@ -2862,6 +2869,37 @@ namespace WavConvert4Amiga
                 }
             }
         }
+        private void ClearAllState()
+        {
+            // Clear all modification tracking
+            currentEffects.Clear();
+            currentCutRegions.Clear();
+            amplificationFactor = 1.0f;
+
+            // Reset UI elements
+            trackBarAmplify.Value = 100;
+            labelAmplify.Text = "Amplify: 100%";
+
+            // Clear undo/redo stacks
+            undoStack.Clear();
+            redoStack.Clear();
+            UpdateEditButtonStates();
+
+            // Clear waveform display
+            waveformViewer.Clear();
+
+            // Reset audio data
+            currentPcmData = null;
+            originalPcmData = null;
+            originalFormat = null;
+
+            // Reset flags
+            isRecorded = false;
+            lastLoadedFilePath = null;
+
+            AddToListBox("State cleared for new session");
+        }
+
         private void SaveProcessedFile(byte[] pcmData, string originalFilePath, int sampleRate)
         {
             try
