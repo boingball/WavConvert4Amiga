@@ -730,14 +730,14 @@ namespace WavConvert4Amiga
                 return;
             }
 
+            // Store original length for logging
+            int originalLength = currentPcmData.Length;
+
             // IMPORTANT: Store current state in undo stack BEFORE making changes
             PushUndo(currentPcmData);
             redoStack.Clear();
 
-            // The key fix: Instead of trying to map back to original positions,
-            // just cut directly from the current audio data and update our working copy
-
-            // Create new array without the cut section (working on current data, not original)
+            // Create new array without the cut section
             byte[] newData = new byte[currentPcmData.Length - (end - start)];
 
             // Copy data before cut point
@@ -749,19 +749,14 @@ namespace WavConvert4Amiga
             // Update current data
             currentPcmData = newData;
 
-            // Since we're working directly on current data, we need to update our approach:
-            // Instead of tracking individual cut regions, we'll mark that we've made a modification
-            // and regenerate from the new current state
-
-            // Add a marker to show we made a cut (for logging purposes)
-            int cutNumber = currentCutRegions.Count + 1;
-            currentCutRegions.Add((start, end)); // This is now just for counting/logging
+            // Add cut marker for counting/logging
+            currentCutRegions.Add((start, end));
 
             // Update waveform display with the new cut data
             waveformViewer.SetAudioData(currentPcmData);
             UpdateEditButtonStates();
 
-            // Clear loop points after cut
+            // Clear loop points after cut (since the cut region is gone)
             waveformViewer.ClearLoopPoints();
 
             if (isPlaying)
@@ -769,7 +764,7 @@ namespace WavConvert4Amiga
                 StopPreview();
             }
 
-            AddToListBox($"Cut applied to current audio. Total cuts: {currentCutRegions.Count}");
+            AddToListBox($"Cut applied. Audio length: {originalLength} → {currentPcmData.Length}. Total cuts: {currentCutRegions.Count}");
         }
 
 
@@ -1934,6 +1929,9 @@ namespace WavConvert4Amiga
                 bool wasPlaying = isPlaying;
                 var (oldLoopStart, oldLoopEnd) = waveformViewer.GetLoopPoints();
 
+                // Store the original audio length BEFORE applying effect
+                int originalLength = currentPcmData.Length;
+
                 if (wasPlaying) StopPreview();
 
                 // Create undo point BEFORE modifying anything
@@ -1971,14 +1969,44 @@ namespace WavConvert4Amiga
                 redoStack.Clear();
                 UpdateEditButtonStates();
 
-                // Restore loop points and playback
+                // NEW: Scale loop points if the audio length changed
                 if (oldLoopStart >= 0 && oldLoopEnd >= 0)
                 {
-                    waveformViewer.RestoreLoopPoints(oldLoopStart, oldLoopEnd);
-                    if (wasPlaying) StartPreview(oldLoopStart, oldLoopEnd);
+                    int newLength = currentPcmData.Length;
+
+                    if (newLength != originalLength && originalLength > 0)
+                    {
+                        // Calculate the scaling ratio
+                        float ratio = (float)newLength / originalLength;
+
+                        // Scale the loop points
+                        int newLoopStart = (int)(oldLoopStart * ratio);
+                        int newLoopEnd = (int)(oldLoopEnd * ratio);
+
+                        // Ensure they're within bounds
+                        newLoopStart = Math.Max(0, Math.Min(newLoopStart, newLength - 1));
+                        newLoopEnd = Math.Max(newLoopStart + 1, Math.Min(newLoopEnd, newLength));
+
+                        // Restore scaled loop points
+                        waveformViewer.RestoreLoopPoints(newLoopStart, newLoopEnd);
+
+                        AddToListBox($"Loop points scaled from {oldLoopStart}-{oldLoopEnd} to {newLoopStart}-{newLoopEnd}");
+
+                        // Resume playback with new loop points if it was playing
+                        if (wasPlaying)
+                        {
+                            StartPreview(newLoopStart, newLoopEnd);
+                        }
+                    }
+                    else
+                    {
+                        // No length change - restore original loop points
+                        waveformViewer.RestoreLoopPoints(oldLoopStart, oldLoopEnd);
+                        if (wasPlaying) StartPreview(oldLoopStart, oldLoopEnd);
+                    }
                 }
 
-                AddToListBox($"{effectName} applied. Total effects: {currentEffects.Count}");
+                AddToListBox($"{effectName} applied. Audio length: {originalLength} → {currentPcmData.Length}. Total effects: {currentEffects.Count}");
             }
             catch (Exception ex)
             {
@@ -2026,9 +2054,10 @@ namespace WavConvert4Amiga
 
             try
             {
-                // Store playback state
+                // Store playback state and original length
                 bool wasPlaying = isPlaying;
                 var (oldLoopStart, oldLoopEnd) = waveformViewer.GetLoopPoints();
+                int originalLength = currentPcmData.Length;
 
                 if (wasPlaying) StopPreview();
 
@@ -2052,26 +2081,32 @@ namespace WavConvert4Amiga
                 redoStack.Clear();
                 UpdateEditButtonStates();
 
-                // Restore loop points if they existed
+                // Scale loop points if length changed
                 if (oldLoopStart >= 0 && oldLoopEnd >= 0)
                 {
-                    waveformViewer.RestoreLoopPoints(oldLoopStart, oldLoopEnd);
-                }
+                    int newLength = currentPcmData.Length;
 
-                // Restore playback if it was playing
-                if (wasPlaying)
-                {
-                    if (oldLoopStart >= 0 && oldLoopEnd >= 0)
+                    if (newLength != originalLength && originalLength > 0)
                     {
-                        StartPreview(oldLoopStart, oldLoopEnd);
+                        float ratio = (float)newLength / originalLength;
+                        int newLoopStart = (int)(oldLoopStart * ratio);
+                        int newLoopEnd = (int)(oldLoopEnd * ratio);
+
+                        newLoopStart = Math.Max(0, Math.Min(newLoopStart, newLength - 1));
+                        newLoopEnd = Math.Max(newLoopStart + 1, Math.Min(newLoopEnd, newLength));
+
+                        waveformViewer.RestoreLoopPoints(newLoopStart, newLoopEnd);
+
+                        if (wasPlaying) StartPreview(newLoopStart, newLoopEnd);
                     }
                     else
                     {
-                        StartPreview(0, currentPcmData.Length);
+                        waveformViewer.RestoreLoopPoints(oldLoopStart, oldLoopEnd);
+                        if (wasPlaying) StartPreview(oldLoopStart, oldLoopEnd);
                     }
                 }
 
-                AddToListBox("Effects reset (cuts and amplification preserved)");
+                AddToListBox($"Effects reset. Audio length: {originalLength} → {currentPcmData.Length} (cuts and amplification preserved)");
             }
             catch (Exception ex)
             {
