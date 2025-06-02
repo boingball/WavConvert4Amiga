@@ -21,13 +21,15 @@ namespace WavConvert4Amiga
 
     public partial class MainForm : Form
     {
-        private const string VERSION = "1.3";
+        private const string VERSION = "1.4";
         [DllImport("user32.dll")]
         private static extern IntPtr LoadCursorFromFile(string lpFileName);
         private SystemAudioRecorder audioRecorder;
         private WaveformProcessor waveformProcessor;
         private RecordedAudioData recordedAudioData;
         private RecordingIndicator recordingIndicator;
+        private List<string> currentEffects = new List<string>();
+        private List<(int start, int end)> currentCutRegions = new List<(int start, int end)>();
         private AudioEffectsProcessor audioEffects;
         private ComboBox comboBoxPTNote;
         private CheckBox checkBoxNTSC;
@@ -100,7 +102,13 @@ namespace WavConvert4Amiga
             string sampleRateString = new string(selectedRate.TakeWhile(char.IsDigit).ToArray());
             int sampleRate = int.TryParse(sampleRateString, out int rate) ? rate : 8363;
 
-            return new AudioState(currentPcmData, sampleRate);
+            return new AudioState(
+                currentPcmData,
+                sampleRate,
+                currentCutRegions.ToList(),
+                amplificationFactor,
+                currentEffects.ToList()
+            );
         }
 
         public MainForm()
@@ -722,49 +730,74 @@ namespace WavConvert4Amiga
                 return;
             }
 
-            // Store current state in undo stack
+            // IMPORTANT: Store current state in undo stack BEFORE making changes
             PushUndo(currentPcmData);
-            redoStack.Clear(); // Clear redo stack when new action is performed
+            redoStack.Clear();
 
-            // Create new array without the cut section
+            // The key fix: Instead of trying to map back to original positions,
+            // just cut directly from the current audio data and update our working copy
+
+            // Create new array without the cut section (working on current data, not original)
             byte[] newData = new byte[currentPcmData.Length - (end - start)];
 
             // Copy data before cut point
             Array.Copy(currentPcmData, 0, newData, 0, start);
 
-            // Copy data after cut point
+            // Copy data after cut point  
             Array.Copy(currentPcmData, end, newData, start, currentPcmData.Length - end);
 
-            // Update current data only (leave originalPcmData unchanged)
+            // Update current data
             currentPcmData = newData;
 
-            // Keep track of the cut region for resampling operations
-            cutRegions.Add((start, end));
+            // Since we're working directly on current data, we need to update our approach:
+            // Instead of tracking individual cut regions, we'll mark that we've made a modification
+            // and regenerate from the new current state
 
-            // Update waveform display
+            // Add a marker to show we made a cut (for logging purposes)
+            int cutNumber = currentCutRegions.Count + 1;
+            currentCutRegions.Add((start, end)); // This is now just for counting/logging
+
+            // Update waveform display with the new cut data
             waveformViewer.SetAudioData(currentPcmData);
             UpdateEditButtonStates();
 
-            // If preview was playing, stop it
+            // Clear loop points after cut
+            waveformViewer.ClearLoopPoints();
+
             if (isPlaying)
             {
                 StopPreview();
             }
+
+            AddToListBox($"Cut applied to current audio. Total cuts: {currentCutRegions.Count}");
         }
+
 
         private void BtnUndo_Click(object sender, EventArgs e)
         {
             if (undoStack.Count == 0) return;
 
-            // Store current state in redo stack
+            // Store current complete state in redo stack before undoing
             PushRedo(currentPcmData);
 
-            // Restore previous state
+            // Restore previous complete state
             var previousState = undoStack.Pop();
-            currentPcmData = previousState.AudioData;
 
-            // Update sample rate in UI
+            // Restore all the state variables
+            currentPcmData = new byte[previousState.AudioData.Length];
+            Array.Copy(previousState.AudioData, currentPcmData, previousState.AudioData.Length);
+
+            // IMPORTANT: Restore the effects and cuts lists
+            currentEffects = previousState.AppliedEffects.ToList();
+            currentCutRegions = previousState.CutRegions.ToList();
+            amplificationFactor = previousState.AmplificationFactor;
+
+            // CRITICAL FIX: Update sample rate in UI to match the restored state
             comboBoxSampleRate.Text = $"{previousState.SampleRate}Hz";
+
+            // Update amplification UI
+            trackBarAmplify.Value = (int)(amplificationFactor * 100);
+            labelAmplify.Text = $"Amplify: {trackBarAmplify.Value}%";
 
             // Update waveform display
             waveformViewer.SetAudioData(currentPcmData);
@@ -779,7 +812,7 @@ namespace WavConvert4Amiga
                 StopPreview();
             }
 
-            AddToListBox($"Undo: Restored state with sample rate {previousState.SampleRate}Hz");
+            AddToListBox($"Undo: Restored state at {previousState.SampleRate}Hz with {currentEffects.Count} effects, {currentCutRegions.Count} cuts");
         }
 
         private void BtnPreviewLoop_Click(object sender, EventArgs e)
@@ -806,6 +839,114 @@ namespace WavConvert4Amiga
                 {
                     StartPreview(start, end);
                 }
+            }
+        }
+
+        private byte[] ApplyAllModifications(byte[] sourceData, int targetSampleRate,
+                                   List<(int start, int end)> cuts = null,
+                                   float amplification = 1.0f,
+                                   List<string> effects = null)
+        {
+            if (sourceData == null) return null;
+
+            byte[] result = sourceData;
+
+            try
+            {
+                // Step 1: Resample to target rate (only if source is original data)
+                if (originalFormat != null && sourceData == originalPcmData && originalFormat.SampleRate != targetSampleRate)
+                {
+                    using (var sourceMs = new MemoryStream())
+                    {
+                        using (var writer = new WaveFileWriter(sourceMs, originalFormat))
+                        {
+                            writer.Write(result, 0, result.Length);
+                            writer.Flush();
+                            sourceMs.Position = 0;
+
+                            using (var reader = new WaveFileReader(sourceMs))
+                            using (var resampler = new MediaFoundationResampler(reader, new WaveFormat(targetSampleRate, 8, 1)))
+                            {
+                                resampler.ResamplerQuality = 60;
+                                result = GetPCMData(resampler);
+                            }
+                        }
+                    }
+                }
+
+                // Step 2: Apply cuts (only if working from original data)
+                if (cuts != null && cuts.Count > 0 && sourceData == originalPcmData)
+                {
+                    // Calculate cut positions based on resampling ratio
+                    double ratio = originalFormat != null ? (double)targetSampleRate / originalFormat.SampleRate : 1.0;
+
+                    foreach (var cut in cuts.OrderByDescending(c => c.start))
+                    {
+                        int scaledStart = (int)(cut.start * ratio);
+                        int scaledEnd = (int)(cut.end * ratio);
+
+                        // Ensure cuts are within bounds
+                        scaledStart = Math.Max(0, Math.Min(scaledStart, result.Length));
+                        scaledEnd = Math.Max(scaledStart, Math.Min(scaledEnd, result.Length));
+
+                        if (scaledEnd > scaledStart)
+                        {
+                            byte[] newData = new byte[result.Length - (scaledEnd - scaledStart)];
+                            Array.Copy(result, 0, newData, 0, scaledStart);
+                            Array.Copy(result, scaledEnd, newData, scaledStart, result.Length - scaledEnd);
+                            result = newData;
+                        }
+                    }
+                }
+
+                // Step 3: Apply amplification
+                if (amplification != 1.0f)
+                {
+                    result = waveformProcessor.ApplyAmplification(result, amplification);
+                }
+
+                // Step 4: Apply effects
+                if (effects != null)
+                {
+                    foreach (string effect in effects)
+                    {
+                        switch (effect)
+                        {
+                            case "lowpass":
+                                if (checkBoxLowPass.Checked)
+                                {
+                                    float cutoffFrequency = targetSampleRate * 0.45f;
+                                    result = waveformProcessor.ApplyLowPassFilter(result, targetSampleRate, cutoffFrequency);
+                                }
+                                break;
+                            case "underwater":
+                                result = audioEffects.ApplyUnderwaterEffect(result, targetSampleRate);
+                                break;
+                            case "robot":
+                                result = audioEffects.ApplyRobotEffect(result, targetSampleRate);
+                                break;
+                            case "highpitch":
+                                result = audioEffects.ApplyPitchShift(result, targetSampleRate, 1.5f);
+                                break;
+                            case "lowpitch":
+                                result = audioEffects.ApplyPitchShift(result, targetSampleRate, 0.75f);
+                                break;
+                            case "echo":
+                                result = audioEffects.ApplyEchoEffect(result, targetSampleRate);
+                                break;
+                            case "vocal":
+                                result = audioEffects.ApplyVocalRemoval(result, targetSampleRate);
+                                break;
+                        }
+                    }
+                }
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                AddToListBox($"Error applying modifications: {ex.Message}");
+                return sourceData;
             }
         }
 
@@ -1141,7 +1282,15 @@ namespace WavConvert4Amiga
         }
         private void PushUndo(byte[] data)
         {
-            var state = CreateCurrentState();
+            // Store the complete current state including effects and cuts
+            var state = new AudioState(
+                data,
+                GetSelectedSampleRate(),
+                currentCutRegions.ToList(),
+                amplificationFactor,
+                currentEffects.ToList()
+            );
+
             undoStack.Push(state);
 
             // Limit stack size
@@ -1160,15 +1309,27 @@ namespace WavConvert4Amiga
         {
             if (redoStack.Count == 0) return;
 
-            // Store current state in undo stack
+            // Store current complete state in undo stack
             PushUndo(currentPcmData);
 
             // Restore redo state
             var redoState = redoStack.Pop();
-            currentPcmData = redoState.AudioData;
 
-            // Update sample rate in UI
+            // Restore all the state variables
+            currentPcmData = new byte[redoState.AudioData.Length];
+            Array.Copy(redoState.AudioData, currentPcmData, redoState.AudioData.Length);
+
+            // IMPORTANT: Restore the effects and cuts lists
+            currentEffects = redoState.AppliedEffects.ToList();
+            currentCutRegions = redoState.CutRegions.ToList();
+            amplificationFactor = redoState.AmplificationFactor;
+
+            // CRITICAL FIX: Update sample rate in UI to match the restored state
             comboBoxSampleRate.Text = $"{redoState.SampleRate}Hz";
+
+            // Update amplification UI
+            trackBarAmplify.Value = (int)(amplificationFactor * 100);
+            labelAmplify.Text = $"Amplify: {trackBarAmplify.Value}%";
 
             // Update waveform display
             waveformViewer.SetAudioData(currentPcmData);
@@ -1183,12 +1344,20 @@ namespace WavConvert4Amiga
                 StopPreview();
             }
 
-            AddToListBox($"Redo: Restored state with sample rate {redoState.SampleRate}Hz");
+            AddToListBox($"Redo: Restored state at {redoState.SampleRate}Hz with {currentEffects.Count} effects, {currentCutRegions.Count} cuts");
         }
 
         private void PushRedo(byte[] data)
         {
-            var state = CreateCurrentState();
+            // Store the complete current state including effects and cuts
+            var state = new AudioState(
+                data,
+                GetSelectedSampleRate(),
+                currentCutRegions.ToList(),
+                amplificationFactor,
+                currentEffects.ToList()
+            );
+
             redoStack.Push(state);
 
             // Limit stack size
@@ -1614,114 +1783,22 @@ namespace WavConvert4Amiga
             amplifyPanel.Controls.Add(trackBarAmplify);
             panelWaveform.Controls.Add(amplifyPanel);
         } // Add this method to apply amplification to audio data
+
         private byte[] AmplifyAndConvert(byte[] pcmData, float amplificationFactor)
         {
+            if (originalPcmData == null) return pcmData;
 
-            //Max Amplification is 5 - We start at 1% and go up to 5%
+            // Always start from original data and apply all current modifications
+            int targetSampleRate = GetSelectedSampleRate();
 
-
-
-            if (pcmData == null || pcmData.Length == 0) return pcmData;
-
-            // Initialize buffers if not already set
-            if (originalFloatData == null || originalFloatData.Length != pcmData.Length)
-            {
-                originalFloatData = new float[pcmData.Length];
-                workingFloatData = new float[pcmData.Length];
-                for (int i = 0; i < pcmData.Length; i++)
-                {
-                    originalFloatData[i] = pcmData[i] - 128; // Convert to signed float range (-128 to 127)
-                    workingFloatData[i] = originalFloatData[i]; // Start with the original
-                }
-            }
-
-
-            if (currentPcmData != null && currentPcmData.Length > 0)
-            {
-                // Calculate the relative amplification factor
-                float relativeFactor = amplificationFactor / previousAmplificationFactor;
-
-                // Update the previous amplification factor for the next call
-                previousAmplificationFactor = amplificationFactor;
-
-                // Apply amplification to the working buffer
-                byte[] amplifiedData = new byte[pcmData.Length];
-                for (int i = 0; i < pcmData.Length; i++)
-                {
-                    float amplifiedSample = workingFloatData[i] * amplificationFactor;
-
-                    // Clamp to valid 8-bit range (-128 to 127)
-                    amplifiedSample = Math.Max(-128, Math.Min(127, amplifiedSample));
-
-                    // Convert back to unsigned 8-bit range (0 to 255)
-                    amplifiedData[i] = (byte)(amplifiedSample + 128);
-                }
-
-                return amplifiedData;
-            }
-
-            try
-            {
-                // Get target sample rate from combo box
-                string selectedSampleRate = comboBoxSampleRate.Text;
-                string sampleRateString = new string(selectedSampleRate.TakeWhile(char.IsDigit).ToArray());
-                int targetSampleRate = int.TryParse(sampleRateString, out int rate) ? rate : originalSampleRate;
-
-                // Create resampled data first using MediaFoundationResampler
-                byte[] resampledData;
-                using (var sourceMs = new MemoryStream())
-                {
-                    using (var writer = new WaveFileWriter(sourceMs, originalFormat))
-                    {
-                        writer.Write(pcmData, 0, pcmData.Length);
-                        writer.Flush();
-                        sourceMs.Position = 0;
-
-                        using (var reader = new WaveFileReader(sourceMs))
-                        using (var resampler = new MediaFoundationResampler(reader, new WaveFormat(targetSampleRate, 8, 1)))
-                        {
-                            resampler.ResamplerQuality = 60;
-                            using (var outStream = new MemoryStream())
-                            {
-                                byte[] buffer = new byte[4096];
-                                int read;
-                                while ((read = resampler.Read(buffer, 0, buffer.Length)) > 0)
-                                {
-                                    outStream.Write(buffer, 0, read);
-                                }
-                                resampledData = outStream.ToArray();
-                            }
-                        }
-                    }
-                }
-
-                // Now apply amplification to the resampled data
-                byte[] amplifiedData = new byte[resampledData.Length];
-                for (int i = 0; i < resampledData.Length; i++)
-                {
-                    // Convert to signed range (-128 to 127)
-                    float sample = (resampledData[i] - 128);
-
-                    // Apply amplification
-                    sample *= amplificationFactor;
-
-                    // Clamp the values
-                    sample = Math.Max(-128, Math.Min(127, sample));
-
-                    // Convert back to unsigned range (0 to 255)
-                    amplifiedData[i] = (byte)(sample + 128);
-                }
-
-                return amplifiedData;
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Error in AmplifyAndConvert: {ex.Message}");
-                // Return original data if there's an error
-                return pcmData;
-            }
+            return ApplyAllModifications(
+                originalPcmData,
+                targetSampleRate,
+                currentCutRegions,
+                amplificationFactor,
+                currentEffects
+            );
         }
-
         private static byte Clamp(byte value, byte min, byte max)
         {
             return (byte)Math.Max(min, Math.Min(max, value));
@@ -1846,40 +1923,104 @@ namespace WavConvert4Amiga
             }
         }
 
+        private void ApplyTrackedEffect(string effectName, Func<byte[]> effectFunction)
+        {
+            if (currentPcmData == null) return;
+
+            AddToListBox($"Applying {effectName}...");
+
+            try
+            {
+                bool wasPlaying = isPlaying;
+                var (oldLoopStart, oldLoopEnd) = waveformViewer.GetLoopPoints();
+
+                if (wasPlaying) StopPreview();
+
+                // Create undo point BEFORE modifying anything
+                PushUndo(currentPcmData);
+
+                // Add effect to current effects list
+                currentEffects.Add(effectName);
+
+                // Apply effect directly to current data
+                int targetSampleRate = GetSelectedSampleRate();
+
+                switch (effectName)
+                {
+                    case "underwater":
+                        currentPcmData = audioEffects.ApplyUnderwaterEffect(currentPcmData, targetSampleRate);
+                        break;
+                    case "robot":
+                        currentPcmData = audioEffects.ApplyRobotEffect(currentPcmData, targetSampleRate);
+                        break;
+                    case "highpitch":
+                        currentPcmData = audioEffects.ApplyPitchShift(currentPcmData, targetSampleRate, 1.5f);
+                        break;
+                    case "lowpitch":
+                        currentPcmData = audioEffects.ApplyPitchShift(currentPcmData, targetSampleRate, 0.75f);
+                        break;
+                    case "echo":
+                        currentPcmData = audioEffects.ApplyEchoEffect(currentPcmData, targetSampleRate);
+                        break;
+                    case "vocal":
+                        currentPcmData = audioEffects.ApplyVocalRemoval(currentPcmData, targetSampleRate);
+                        break;
+                }
+
+                waveformViewer.SetAudioData(currentPcmData);
+                redoStack.Clear();
+                UpdateEditButtonStates();
+
+                // Restore loop points and playback
+                if (oldLoopStart >= 0 && oldLoopEnd >= 0)
+                {
+                    waveformViewer.RestoreLoopPoints(oldLoopStart, oldLoopEnd);
+                    if (wasPlaying) StartPreview(oldLoopStart, oldLoopEnd);
+                }
+
+                AddToListBox($"{effectName} applied. Total effects: {currentEffects.Count}");
+            }
+            catch (Exception ex)
+            {
+                currentEffects.Remove(effectName);
+                MessageBox.Show($"Error applying effect: {ex.Message}", "Effect Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
         private void ApplyVocalRemovalEffect(object sender, EventArgs e)
         {
-            ApplyEffect(audioEffects.ApplyVocalRemoval, "vocal removal effect");
-
+            ApplyTrackedEffect("vocal", () => audioEffects.ApplyVocalRemoval(currentPcmData, GetSelectedSampleRate()));
         }
 
         private void ApplyUnderwaterEffect(object sender, EventArgs e)
         {
-            ApplyEffect(audioEffects.ApplyUnderwaterEffect, "underwater effect");
+            ApplyTrackedEffect("underwater", () => audioEffects.ApplyUnderwaterEffect(currentPcmData, GetSelectedSampleRate()));
         }
 
         private void ApplyRobotEffect(object sender, EventArgs e)
         {
-            ApplyEffect(audioEffects.ApplyRobotEffect, "robot voice effect");
+            ApplyTrackedEffect("robot", () => audioEffects.ApplyRobotEffect(currentPcmData, GetSelectedSampleRate()));
         }
 
         private void ApplyHighPitchEffect(object sender, EventArgs e)
         {
-            ApplyEffect((data, rate) => audioEffects.ApplyPitchShift(data, rate, 1.5f), "high pitch effect");
+            ApplyTrackedEffect("highpitch", () => audioEffects.ApplyPitchShift(currentPcmData, GetSelectedSampleRate(), 1.5f));
         }
 
         private void ApplyLowPitchEffect(object sender, EventArgs e)
         {
-            ApplyEffect((data, rate) => audioEffects.ApplyPitchShift(data, rate, 0.75f), "low pitch effect");
+            ApplyTrackedEffect("lowpitch", () => audioEffects.ApplyPitchShift(currentPcmData, GetSelectedSampleRate(), 0.75f));
         }
 
         private void ApplyEchoEffect(object sender, EventArgs e)
         {
-            ApplyEffect(audioEffects.ApplyEchoEffect, "echo effect");
+            ApplyTrackedEffect("echo", () => audioEffects.ApplyEchoEffect(currentPcmData, GetSelectedSampleRate()));
         }
 
         private void ResetEffects(object sender, EventArgs e)
         {
             if (originalPcmData == null) return;
+
             AddToListBox("Resetting effects...");
             SetCustomCursor("busy");
 
@@ -1888,47 +2029,41 @@ namespace WavConvert4Amiga
                 // Store playback state
                 bool wasPlaying = isPlaying;
                 var (oldLoopStart, oldLoopEnd) = waveformViewer.GetLoopPoints();
-                float oldLength = currentPcmData.Length;  // NEW
 
-                // Stop playback temporarily
-                if (wasPlaying)
-                {
-                    StopPreview();
-                }
+                if (wasPlaying) StopPreview();
 
                 // Create undo point
-                byte[] prevData = new byte[currentPcmData.Length];
-                Array.Copy(currentPcmData, prevData, currentPcmData.Length);
-                PushUndo(prevData);
+                PushUndo(currentPcmData);
 
-                // Reset to original
-                currentPcmData = new byte[originalPcmData.Length];
-                Array.Copy(originalPcmData, currentPcmData, originalPcmData.Length);
-                ProcessWithCurrentSampleRate();
+                // Clear effects but keep cuts and amplification
+                currentEffects.Clear();
 
-                // Clear redo stack and update UI
+                // Regenerate audio with current cuts and amplification but no effects
+                int targetSampleRate = GetSelectedSampleRate();
+                currentPcmData = ApplyAllModifications(
+                    originalPcmData,
+                    targetSampleRate,
+                    currentCutRegions,
+                    amplificationFactor,
+                    currentEffects
+                );
+
+                waveformViewer.SetAudioData(currentPcmData);
                 redoStack.Clear();
                 UpdateEditButtonStates();
 
-                // Adjust and restore loop points if they existed
+                // Restore loop points if they existed
                 if (oldLoopStart >= 0 && oldLoopEnd >= 0)
                 {
-                    float ratio = currentPcmData.Length / oldLength;  // NEW
-                    int newLoopStart = (int)(oldLoopStart * ratio);  // NEW
-                    int newLoopEnd = (int)(oldLoopEnd * ratio);      // NEW
-                    waveformViewer.RestoreLoopPoints(newLoopStart, newLoopEnd);
+                    waveformViewer.RestoreLoopPoints(oldLoopStart, oldLoopEnd);
                 }
-
 
                 // Restore playback if it was playing
                 if (wasPlaying)
                 {
                     if (oldLoopStart >= 0 && oldLoopEnd >= 0)
                     {
-                        float ratio = currentPcmData.Length / oldLength;  // NEW
-                        int newLoopStart = (int)(oldLoopStart * ratio);  // NEW
-                        int newLoopEnd = (int)(oldLoopEnd * ratio);      // NEW
-                        StartPreview(newLoopStart, newLoopEnd);
+                        StartPreview(oldLoopStart, oldLoopEnd);
                     }
                     else
                     {
@@ -1936,28 +2071,39 @@ namespace WavConvert4Amiga
                     }
                 }
 
-                AddToListBox("Effects reset to original");
+                AddToListBox("Effects reset (cuts and amplification preserved)");
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Error resetting effects: {ex.Message}", "Reset Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            } finally
+            }
+            finally
             {
                 SetCustomCursor("normal");
             }
         }
 
-       
         private void ProcessSampleRateChange()
         {
-            // Stop any current playback
             StopPreview();
             if (originalPcmData == null && !isRecorded) return;
+
             try
             {
                 int targetSampleRate = GetSelectedSampleRate();
                 AddToListBox($"Converting to {targetSampleRate}Hz...");
-                // Always resample from the original high-quality data
+
+                // Create undo point BEFORE changing sample rate
+                if (currentPcmData != null && undoStack.Count > 0)
+                {
+                    PushUndo(currentPcmData);
+                }
+
+                // ALWAYS start from original data for proper resampling (preserves pitch/speed)
+                // But we need to handle cuts differently since they can't be applied to original positions
+
+                // Step 1: Resample original data to target rate
+                byte[] resampledOriginal;
                 using (var sourceMs = new MemoryStream())
                 {
                     using (var writer = new WaveFileWriter(sourceMs, originalFormat))
@@ -1970,47 +2116,113 @@ namespace WavConvert4Amiga
                         using (var resampler = new MediaFoundationResampler(reader, new WaveFormat(targetSampleRate, 8, 1)))
                         {
                             resampler.ResamplerQuality = 60;
-                            byte[] resampledData = GetPCMData(resampler);
-
-                            // Re-apply cuts to the resampled data
-                            foreach (var cut in cutRegions.OrderByDescending(c => c.start))
-                            {
-                                // Calculate new cut positions based on sample rate change
-                                double ratio = (double)targetSampleRate / originalFormat.SampleRate;
-                                int newStart = (int)(cut.start * ratio);
-                                int newEnd = (int)(cut.end * ratio);
-
-                                // Create new array without the cut section
-                                byte[] newData = new byte[resampledData.Length - (newEnd - newStart)];
-                                Array.Copy(resampledData, 0, newData, 0, newStart);
-                                Array.Copy(resampledData, newEnd, newData, newStart, resampledData.Length - newEnd);
-                                resampledData = newData;
-                            }
-                            currentPcmData = resampledData;
+                            resampledOriginal = GetPCMData(resampler);
                         }
                     }
                 }
 
-                // Apply any effects to the resampled data
-                if (amplificationFactor != 1.0f)
+                // Step 2: If we have cuts, we need to re-apply them at the new sample rate
+                byte[] result = resampledOriginal;
+
+                if (currentCutRegions.Count > 0)
                 {
-                    currentPcmData = waveformProcessor.ApplyAmplification(currentPcmData, amplificationFactor);
+                    AddToListBox($"Re-applying {currentCutRegions.Count} cuts at new sample rate...");
+
+                    // Calculate the scaling ratio for cut positions
+                    double ratio = originalFormat != null ? (double)targetSampleRate / originalFormat.SampleRate : 1.0;
+
+                    // Apply cuts in reverse order (from end to start) to maintain correct positions
+                    var scaledCuts = currentCutRegions
+                        .Select(cut => (
+                            start: (int)(cut.start * ratio),
+                            end: (int)(cut.end * ratio)
+                        ))
+                        .OrderByDescending(cut => cut.start)
+                        .ToList();
+
+                    foreach (var cut in scaledCuts)
+                    {
+                        int scaledStart = Math.Max(0, Math.Min(cut.start, result.Length));
+                        int scaledEnd = Math.Max(scaledStart, Math.Min(cut.end, result.Length));
+
+                        if (scaledEnd > scaledStart)
+                        {
+                            byte[] newData = new byte[result.Length - (scaledEnd - scaledStart)];
+                            Array.Copy(result, 0, newData, 0, scaledStart);
+                            Array.Copy(result, scaledEnd, newData, scaledStart, result.Length - scaledEnd);
+                            result = newData;
+                        }
+                    }
                 }
 
-                if (checkBoxLowPass.Checked)
+                // Step 3: Apply amplification if not default
+                if (amplificationFactor != 1.0f)
                 {
-                    float cutoffFrequency = targetSampleRate * 0.45f;
-                    currentPcmData = waveformProcessor.ApplyLowPassFilter(currentPcmData, targetSampleRate, cutoffFrequency);
+                    result = waveformProcessor.ApplyAmplification(result, amplificationFactor);
                 }
+
+                // Step 4: Apply effects
+                foreach (string effect in currentEffects)
+                {
+                    switch (effect)
+                    {
+                        case "lowpass":
+                            if (checkBoxLowPass.Checked)
+                            {
+                                float cutoffFrequency = targetSampleRate * 0.45f;
+                                result = waveformProcessor.ApplyLowPassFilter(result, targetSampleRate, cutoffFrequency);
+                            }
+                            break;
+                        case "underwater":
+                            result = audioEffects.ApplyUnderwaterEffect(result, targetSampleRate);
+                            break;
+                        case "robot":
+                            result = audioEffects.ApplyRobotEffect(result, targetSampleRate);
+                            break;
+                        case "highpitch":
+                            result = audioEffects.ApplyPitchShift(result, targetSampleRate, 1.5f);
+                            break;
+                        case "lowpitch":
+                            result = audioEffects.ApplyPitchShift(result, targetSampleRate, 0.75f);
+                            break;
+                        case "echo":
+                            result = audioEffects.ApplyEchoEffect(result, targetSampleRate);
+                            break;
+                        case "vocal":
+                            result = audioEffects.ApplyVocalRemoval(result, targetSampleRate);
+                            break;
+                    }
+                }
+
+                // Update current data
+                currentPcmData = result;
 
                 // Update display
                 waveformViewer.SetAudioData(currentPcmData);
-                AddToListBox($"Conversion to {targetSampleRate}Hz complete");
+                waveformViewer.SetSampleRate(targetSampleRate);
+
+                AddToListBox($"Conversion to {targetSampleRate}Hz complete. Preserved {currentCutRegions.Count} cuts, {currentEffects.Count} effects");
             }
             catch (Exception ex)
             {
                 AddToListBox($"Error resampling audio: {ex.Message}");
             }
+        }
+
+        // Helper method to determine the current sample rate of the audio
+        private int GetCurrentAudioSampleRate()
+        {
+            // Try to parse the current sample rate from the UI
+            string selectedRate = comboBoxSampleRate.Text;
+            string sampleRateString = new string(selectedRate.TakeWhile(char.IsDigit).ToArray());
+
+            if (int.TryParse(sampleRateString, out int rate) && rate > 0)
+            {
+                return rate;
+            }
+
+            // Fallback to original format if available
+            return originalFormat?.SampleRate ?? 8363;
         }
 
         private int GetSelectedSampleRate()
@@ -2168,6 +2380,9 @@ namespace WavConvert4Amiga
                     waveformViewer.SetAudioData(currentPcmData);
                     waveformViewer.Invalidate();
                     isRecorded = false;
+
+                    // NOW store the initial state - this should be AFTER currentPcmData is set
+                    StoreInitialState();
                 }
 
                 AddToListBox($"Loaded file: {Path.GetFileName(filePath)}");
@@ -2193,6 +2408,36 @@ namespace WavConvert4Amiga
             }
         }
 
+        private void StoreInitialState()
+        {
+            if (currentPcmData != null && originalFormat != null)
+            {
+                // Clear all modification lists
+                currentEffects.Clear();
+                currentCutRegions.Clear();
+                amplificationFactor = 1.0f;
+                trackBarAmplify.Value = 100;
+                labelAmplify.Text = "Amplify: 100%";
+
+                // Clear existing undo/redo stacks
+                undoStack.Clear();
+                redoStack.Clear();
+
+                // Store this as the initial state WITH the original sample rate
+                var initialState = new AudioState(
+                    currentPcmData,
+                    originalFormat.SampleRate, // Use ORIGINAL sample rate, not current UI selection
+                    currentCutRegions.ToList(),
+                    amplificationFactor,
+                    currentEffects.ToList()
+                );
+
+                undoStack.Push(initialState);
+                UpdateEditButtonStates();
+
+                AddToListBox($"Initial clean state stored (Original: {originalFormat.SampleRate}Hz)");
+            }
+        }
 
         private void MoveOriginalFile(string filePath)
         {
