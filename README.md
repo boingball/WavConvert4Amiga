@@ -87,10 +87,10 @@ MIT License
 - ProTracker documentation for frequency tables
 
 ## Version History
-### 1.4
+### v1.4
 - Workflow bugs should now be resolved.
 
-###1.3
+### v1.3
 - Amiga ST-xx Sample format added
 - You can now load 8svx and original Amiga St-xx sample formats directly in to wavconvert.
 
