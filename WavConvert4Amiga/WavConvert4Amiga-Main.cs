@@ -76,7 +76,6 @@ namespace WavConvert4Amiga
         private readonly Dictionary<QueueItem, DataGridViewRow> queueRows = new Dictionary<QueueItem, DataGridViewRow>();
         private ContextMenuStrip queueItemContextMenu;
         private ToolStripMenuItem queueSampleRateMenuItem;
-        private ToolStripMenuItem queueSetCustomSampleRateMenuItem;
         private ToolStripMenuItem queueToggleLowPassMenuItem;
         private ToolStripMenuItem queueToggleAutoConvertMenuItem;
         private ToolStripMenuItem queueToggleMoveOriginalMenuItem;
@@ -786,20 +785,29 @@ namespace WavConvert4Amiga
             queueItemContextMenu.Opening += QueueItemContextMenu_Opening;
 
             queueSampleRateMenuItem = new ToolStripMenuItem("Sample Rate");
-            foreach (int sampleRate in new[] { 8363, 11025, 16000, 22050, 32000, 44100, 48000 })
+            var targetSampleRates = new (int sampleRate, string label)[]
             {
-                ToolStripMenuItem sampleRateItem = new ToolStripMenuItem($"{sampleRate}Hz")
+                (150, "150Hz - BitCrushed+++"),
+                (250, "250Hz - BitCrushed++"),
+                (500, "500Hz - BitCrushed+"),
+                (1000, "1000Hz - BitCrushed"),
+                (4143, "4143Hz - Half-Rate"),
+                (8287, "8287Hz - PAL Middle - C"),
+                (8363, "8363Hz - NTSC Middle - C"),
+                (22050, "22050Hz - HQ Already Tuned"),
+                (28836, "28836Hz - Maximum Quality - PAL"),
+                (29101, "29101Hz - Maximum Quality - NTSC")
+            };
+
+            foreach (var rateOption in targetSampleRates)
+            {
+                ToolStripMenuItem sampleRateItem = new ToolStripMenuItem(rateOption.label)
                 {
-                    Tag = sampleRate
+                    Tag = rateOption.sampleRate
                 };
                 sampleRateItem.Click += QueueSampleRateItem_Click;
                 queueSampleRateMenuItem.DropDownItems.Add(sampleRateItem);
             }
-
-            queueSetCustomSampleRateMenuItem = new ToolStripMenuItem("Custom Sample Rate...");
-            queueSetCustomSampleRateMenuItem.Click += QueueSetCustomSampleRateMenuItem_Click;
-            queueSampleRateMenuItem.DropDownItems.Add(new ToolStripSeparator());
-            queueSampleRateMenuItem.DropDownItems.Add(queueSetCustomSampleRateMenuItem);
 
             queueToggleLowPassMenuItem = new ToolStripMenuItem("Low-pass enabled");
             queueToggleLowPassMenuItem.Click += QueueToggleLowPassMenuItem_Click;
@@ -879,7 +887,6 @@ namespace WavConvert4Amiga
 
             queueLoadPreviewMenuItem.Enabled = selectedItem.Status != QueueItemStatus.Processing;
             queueSampleRateMenuItem.Enabled = canModify;
-            queueSetCustomSampleRateMenuItem.Enabled = canModify;
             queueToggleLowPassMenuItem.Enabled = canModify;
             queueToggleAutoConvertMenuItem.Enabled = canModify;
             queueToggleMoveOriginalMenuItem.Enabled = canModify;
@@ -2784,23 +2791,6 @@ namespace WavConvert4Amiga
             SetSelectedQueueItemSampleRate(sampleRate);
         }
 
-        private void QueueSetCustomSampleRateMenuItem_Click(object sender, EventArgs e)
-        {
-            QueueItem selectedItem = GetSelectedQueueItem();
-            if (selectedItem == null)
-            {
-                return;
-            }
-
-            int? customSampleRate = ShowSampleRateInputDialog(selectedItem.TargetSampleRate);
-            if (!customSampleRate.HasValue)
-            {
-                return;
-            }
-
-            SetSelectedQueueItemSampleRate(customSampleRate.Value);
-        }
-
         private void SetSelectedQueueItemSampleRate(int sampleRate)
         {
             QueueItem selectedItem = GetSelectedQueueItem();
@@ -2949,46 +2939,6 @@ namespace WavConvert4Amiga
             catch (Exception ex)
             {
                 MessageBox.Show($"Unable to load queue item preview: {ex.Message}", "Queue preview error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
-
-        private int? ShowSampleRateInputDialog(int currentSampleRate)
-        {
-            using (Form prompt = new Form())
-            {
-                prompt.Width = 320;
-                prompt.Height = 150;
-                prompt.Text = "Queue Item Sample Rate";
-                prompt.FormBorderStyle = FormBorderStyle.FixedDialog;
-                prompt.StartPosition = FormStartPosition.CenterParent;
-                prompt.MinimizeBox = false;
-                prompt.MaximizeBox = false;
-                prompt.ShowInTaskbar = false;
-
-                Label textLabel = new Label() { Left = 12, Top = 15, Text = "Enter target sample rate (Hz):", Width = 280 };
-                TextBox inputBox = new TextBox() { Left = 12, Top = 42, Width = 280, Text = currentSampleRate.ToString() };
-                Button confirmation = new Button() { Text = "OK", Left = 136, Width = 75, Top = 75, DialogResult = DialogResult.OK };
-                Button cancel = new Button() { Text = "Cancel", Left = 217, Width = 75, Top = 75, DialogResult = DialogResult.Cancel };
-
-                prompt.Controls.Add(textLabel);
-                prompt.Controls.Add(inputBox);
-                prompt.Controls.Add(confirmation);
-                prompt.Controls.Add(cancel);
-                prompt.AcceptButton = confirmation;
-                prompt.CancelButton = cancel;
-
-                if (prompt.ShowDialog(this) != DialogResult.OK)
-                {
-                    return null;
-                }
-
-                if (!int.TryParse(inputBox.Text, out int sampleRate) || sampleRate < 1000 || sampleRate > 192000)
-                {
-                    MessageBox.Show("Please enter a valid sample rate between 1000 and 192000 Hz.", "Invalid sample rate", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return null;
-                }
-
-                return sampleRate;
             }
         }
 
