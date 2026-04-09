@@ -83,6 +83,9 @@ namespace WavConvert4Amiga
         private readonly Dictionary<QueueItem, DataGridViewRow> queueRows = new Dictionary<QueueItem, DataGridViewRow>();
         private bool isQueueRunning = false;
         private bool queueStopRequested = false;
+        private Label labelPTNote;
+        private Panel recordingPanel;
+        private Panel effectsPanel;
 
 
         private Dictionary<string, (int pal, int ntsc)> ptNoteToHz = new Dictionary<string, (int pal, int ntsc)>()
@@ -224,6 +227,7 @@ namespace WavConvert4Amiga
             // Set minimum size to prevent controls from being cut off
             // Adjust these values based on your actual layout needs
             this.MinimumSize = new Size(800, 600);
+            this.AutoScroll = true;
             BackColor = Color.FromArgb(80, 90, 120); // Darker blue-grey
             ForeColor = Color.White;
             // Set panel colors
@@ -249,6 +253,8 @@ namespace WavConvert4Amiga
                 comboBoxSampleRate.ForeColor = Color.FromArgb(180, 190, 210);
                 comboBoxSampleRate.Font = FontManager.GetMainFont(9f, FontStyle.Regular);
             }
+
+            this.Resize += MainForm_Resize;
         }
 
         private void MainForm_Load(object sender, EventArgs e)
@@ -273,6 +279,109 @@ namespace WavConvert4Amiga
 
             // Optionally select a default value
             comboBoxSampleRate.SelectedIndex = 5; // Select the first item by default
+            LayoutMainFormControls();
+        }
+
+        private void MainForm_Resize(object sender, EventArgs e)
+        {
+            LayoutMainFormControls();
+        }
+
+        private void LayoutMainFormControls()
+        {
+            if (this.ClientSize.Width <= 0 || this.ClientSize.Height <= 0)
+            {
+                return;
+            }
+
+            SuspendLayout();
+            try
+            {
+                const int margin = 16;
+                const int gap = 8;
+                int row1Y = 10;
+                int row2Y = 42;
+                int row3Y = row2Y + 34;
+
+                label1.Location = new Point(margin, row1Y + 4);
+                comboBoxSampleRate.Location = new Point(label1.Right + gap, row1Y);
+                comboBoxSampleRate.Width = 290;
+
+                if (labelPTNote != null)
+                {
+                    labelPTNote.Location = new Point(comboBoxSampleRate.Right + 12, row1Y + 4);
+                }
+
+                if (comboBoxPTNote != null)
+                {
+                    comboBoxPTNote.Location = new Point((labelPTNote?.Right ?? comboBoxSampleRate.Right) + gap, row1Y);
+                    comboBoxPTNote.Width = 120;
+                }
+
+                if (checkBoxNTSC != null)
+                {
+                    checkBoxNTSC.Location = new Point(comboBoxPTNote.Right + gap, row1Y + 3);
+                }
+
+                int rightX = ClientSize.Width - margin;
+                Action<CheckBox, int> placeRight = (cb, y) =>
+                {
+                    if (cb == null) return;
+                    int w = cb.PreferredSize.Width;
+                    cb.Location = new Point(rightX - w, y);
+                    rightX = cb.Left - gap;
+                };
+
+                rightX = ClientSize.Width - margin;
+                placeRight(checkBoxEnable8SVX, row1Y + 3);
+                placeRight(checkBox16BitWAV, row1Y + 3);
+                placeRight(checkBoxLowPass, row2Y + 5);
+
+                btnManualConvert.Location = new Point(margin, row2Y);
+                btnManualConvert.Size = new Size(210, 30);
+                btnQueueAddFiles.Location = new Point(btnManualConvert.Right + gap, row2Y);
+                btnQueueStart.Location = new Point(btnQueueAddFiles.Right + gap, row2Y);
+                btnQueueStop.Location = new Point(btnQueueStart.Right + gap, row2Y);
+                btnQueueClearCompleted.Location = new Point(margin, row3Y);
+                btnQueueClearCompleted.Size = new Size(210, 30);
+
+                rightX = ClientSize.Width - margin;
+                placeRight(checkBoxMoveOriginal, row3Y + 5);
+                placeRight(checkBoxAutoConvert, row3Y + 5);
+
+                int waveformTop = row3Y + btnQueueClearCompleted.Height + gap;
+                panelWaveform.Location = new Point(margin, waveformTop);
+                panelWaveform.Size = new Size(ClientSize.Width - (margin * 2), Math.Max(300, (int)(ClientSize.Height * 0.42f)));
+
+                int listTop = panelWaveform.Bottom + gap;
+                int dropWidth = Math.Min(430, Math.Max(300, ClientSize.Width / 3));
+                int dropHeight = 250;
+                panel1.Size = new Size(dropWidth, dropHeight);
+                panel1.Location = new Point(ClientSize.Width - margin - panel1.Width, listTop);
+
+                listBoxFiles.Location = new Point(margin, listTop);
+                listBoxFiles.Size = new Size(Math.Max(280, panel1.Left - margin - gap), 68);
+
+                dataGridViewQueue.Location = new Point(margin, listBoxFiles.Bottom + gap);
+                dataGridViewQueue.Size = new Size(ClientSize.Width - (margin * 2), 95);
+
+                panelBottom.Location = new Point(margin, dataGridViewQueue.Bottom + gap);
+                panelBottom.Size = new Size(ClientSize.Width - (margin * 2), Math.Max(170, ClientSize.Height - panelBottom.Top - margin));
+
+                if (recordingPanel != null)
+                {
+                    recordingPanel.Location = new Point(10, 10);
+                }
+
+                if (effectsPanel != null)
+                {
+                    effectsPanel.Location = new Point(Math.Max(10, panelBottom.Width - effectsPanel.Width - 10), 10);
+                }
+            }
+            finally
+            {
+                ResumeLayout(true);
+            }
         }
 
         private void InitializeCursors()
@@ -482,7 +591,7 @@ namespace WavConvert4Amiga
             comboBoxPTNote.Leave += ComboBoxPTNote_Leave;
 
             // Add label with adjusted spacing
-            Label labelPTNote = new Label();
+            labelPTNote = new Label();
             labelPTNote.Text = "PT Note";
             labelPTNote.AutoSize = true;
             labelPTNote.Location = new Point(comboBoxPTNote.Left - 45, label1.Top); // Aligned with "Sample Rate" label
@@ -1103,7 +1212,7 @@ namespace WavConvert4Amiga
             audioRecorder = new SystemAudioRecorder();
 
             // Create a panel for the recording controls
-            Panel recordingPanel = new Panel
+            recordingPanel = new Panel
             {
                 Location = new Point(10, 10),
                 Size = new Size(325, 160),
@@ -1870,7 +1979,7 @@ namespace WavConvert4Amiga
             audioEffects = new AudioEffectsProcessor(cursorType => SetCustomCursor(cursorType));
 
             // Create effects panel
-            Panel effectsPanel = new Panel
+            effectsPanel = new Panel
             {
                 Location = new Point(panelBottom.Width - 300, 10),
                 Size = new Size(280, 200),
