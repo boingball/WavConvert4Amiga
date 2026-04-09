@@ -18,8 +18,6 @@ namespace WavConvert4Amiga
         private TaskCompletionSource<bool> recordingComplete;
         private readonly object lockObject = new object();
         private int currentDeviceNumber = 0;
-        private int deviceNumber = 0;
-        private int requestedSampleRate = 44100;
 
         public byte[] RecordedData { get; private set; }
         public byte[] ProcessedData { get; private set; } // This will store converted data

@@ -27,7 +27,6 @@ namespace WavConvert4Amiga
         private static extern IntPtr LoadCursorFromFile(string lpFileName);
         private SystemAudioRecorder audioRecorder;
         private WaveformProcessor waveformProcessor;
-        private RecordedAudioData recordedAudioData;
         private RecordingIndicator recordingIndicator;
         private List<string> currentEffects = new List<string>();
         private List<(int start, int end)> currentCutRegions = new List<(int start, int end)>();
@@ -58,19 +57,13 @@ namespace WavConvert4Amiga
         private bool isPlaying = false;
         private int currentPreviewStart = -1;
         private int currentPreviewEnd = -1;
-        private string tempSourceFile; // Store path to temp file
         private int originalSampleRate; // Store original format
         private byte[] originalPcmData;
         private readonly object playbackLock = new object();
-        private static int previewCounter = 0;
         private IWaveProvider currentWaveProvider;
         private TrackBar trackBarAmplify;
         private Label labelAmplify;
         private float amplificationFactor = 1.0f;
-        private float previousAmplificationFactor = 1.0f;  // Add this as a class field
-       // Store original data as floating-point intermediate values
-        private float[] originalFloatData = null; // Holds the original unprocessed data
-        private float[] workingFloatData = null; // Holds the current state after effects and adjustments
         private Dictionary<string, Cursor> customCursors = new Dictionary<string, Cursor>();
         private Font retroFont;
       //  private Stack<byte[]> undoStack = new Stack<byte[]>();
@@ -3568,16 +3561,6 @@ namespace WavConvert4Amiga
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
             base.OnFormClosing(e);
-
-            // Clean up temp file
-            if (!string.IsNullOrEmpty(tempSourceFile) && File.Exists(tempSourceFile))
-            {
-                try
-                {
-                    File.Delete(tempSourceFile);
-                }
-                catch { /* Ignore cleanup errors on exit */ }
-            }
 
             // Clean up audio resources
             StopPreview();
