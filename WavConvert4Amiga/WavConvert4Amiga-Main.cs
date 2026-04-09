@@ -301,7 +301,6 @@ namespace WavConvert4Amiga
                 const int gap = 8;
                 int row1Y = 10;
                 int row2Y = 42;
-                int row3Y = row2Y + 34;
 
                 label1.Location = new Point(margin, row1Y + 4);
                 comboBoxSampleRate.Location = new Point(label1.Right + gap, row1Y);
@@ -333,23 +332,37 @@ namespace WavConvert4Amiga
                 };
 
                 rightX = ClientSize.Width - margin;
+                placeRight(checkBoxMoveOriginal, row1Y + 3);
+                placeRight(checkBoxAutoConvert, row1Y + 3);
+                placeRight(checkBoxLowPass, row1Y + 3);
                 placeRight(checkBoxEnable8SVX, row1Y + 3);
                 placeRight(checkBox16BitWAV, row1Y + 3);
-                placeRight(checkBoxLowPass, row2Y + 5);
 
-                btnManualConvert.Location = new Point(margin, row2Y);
-                btnManualConvert.Size = new Size(210, 30);
-                btnQueueAddFiles.Location = new Point(btnManualConvert.Right + gap, row2Y);
-                btnQueueStart.Location = new Point(btnQueueAddFiles.Right + gap, row2Y);
-                btnQueueStop.Location = new Point(btnQueueStart.Right + gap, row2Y);
-                btnQueueClearCompleted.Location = new Point(margin, row3Y);
-                btnQueueClearCompleted.Size = new Size(210, 30);
+                const int queueButtonHeight = 30;
+                const int queueButtonCount = 5;
+                int queueButtonWidth = Math.Max(130, Math.Min(180, (ClientSize.Width - (margin * 2) - (gap * (queueButtonCount - 1))) / queueButtonCount));
+                int queueButtonsLeft = margin;
 
-                rightX = ClientSize.Width - margin;
-                placeRight(checkBoxMoveOriginal, row3Y + 5);
-                placeRight(checkBoxAutoConvert, row3Y + 5);
+                btnManualConvert.Location = new Point(queueButtonsLeft, row2Y);
+                btnManualConvert.Size = new Size(queueButtonWidth, queueButtonHeight);
+                queueButtonsLeft = btnManualConvert.Right + gap;
 
-                int waveformTop = row3Y + btnQueueClearCompleted.Height + gap;
+                btnQueueAddFiles.Location = new Point(queueButtonsLeft, row2Y);
+                btnQueueAddFiles.Size = new Size(queueButtonWidth, queueButtonHeight);
+                queueButtonsLeft = btnQueueAddFiles.Right + gap;
+
+                btnQueueStart.Location = new Point(queueButtonsLeft, row2Y);
+                btnQueueStart.Size = new Size(queueButtonWidth, queueButtonHeight);
+                queueButtonsLeft = btnQueueStart.Right + gap;
+
+                btnQueueStop.Location = new Point(queueButtonsLeft, row2Y);
+                btnQueueStop.Size = new Size(queueButtonWidth, queueButtonHeight);
+                queueButtonsLeft = btnQueueStop.Right + gap;
+
+                btnQueueClearCompleted.Location = new Point(queueButtonsLeft, row2Y);
+                btnQueueClearCompleted.Size = new Size(queueButtonWidth, queueButtonHeight);
+
+                int waveformTop = row2Y + queueButtonHeight + 4;
                 const int listHeight = 68;
                 const int queueHeight = 95;
                 const int bottomHeight = 220;

@@ -286,8 +286,10 @@
             this.Controls.Add(this.checkBoxEnable8SVX);
             this.Controls.Add(this.checkBox16BitWAV);
             this.DoubleBuffered = true;
+            this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.Sizable;
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
+            this.MaximizeBox = true;
             this.Name = "MainForm";
             this.Text = "SoundConvert4Amiga";
             this.Load += new System.EventHandler(this.MainForm_Load);
