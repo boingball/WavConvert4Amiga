@@ -74,6 +74,7 @@ namespace WavConvert4Amiga
 
         private DateTime playbackStartTime;
         private int sampleRate = 8000; // Default sample rate
+        public int CurrentSampleRate => sampleRate;
 
         public void SetSampleRate(int rate)
         {

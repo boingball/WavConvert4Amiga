@@ -1622,12 +1622,14 @@ namespace WavConvert4Amiga
                 comboBoxMicrophone.SelectedIndex = 0;
             }
         }
-        private void PushUndo(byte[] data)
+        private void PushUndo(byte[] data, int? sampleRateOverride = null)
         {
+            int sampleRate = sampleRateOverride ?? waveformViewer?.CurrentSampleRate ?? GetSelectedSampleRate();
+
             // Store the complete current state including effects and cuts
             var state = new AudioState(
                 data,
-                GetSelectedSampleRate(),
+                sampleRate,
                 currentCutRegions.ToList(),
                 amplificationFactor,
                 currentEffects.ToList()
@@ -1689,12 +1691,14 @@ namespace WavConvert4Amiga
             AddToListBox($"Redo: Restored state at {redoState.SampleRate}Hz with {currentEffects.Count} effects, {currentCutRegions.Count} cuts");
         }
 
-        private void PushRedo(byte[] data)
+        private void PushRedo(byte[] data, int? sampleRateOverride = null)
         {
+            int sampleRate = sampleRateOverride ?? waveformViewer?.CurrentSampleRate ?? GetSelectedSampleRate();
+
             // Store the complete current state including effects and cuts
             var state = new AudioState(
                 data,
-                GetSelectedSampleRate(),
+                sampleRate,
                 currentCutRegions.ToList(),
                 amplificationFactor,
                 currentEffects.ToList()
@@ -2473,12 +2477,13 @@ namespace WavConvert4Amiga
             try
             {
                 int targetSampleRate = GetSelectedSampleRate();
+                int currentSampleRate = waveformViewer?.CurrentSampleRate ?? targetSampleRate;
                 AddToListBox($"Converting to {targetSampleRate}Hz...");
 
                 // Create undo point BEFORE changing sample rate
                 if (currentPcmData != null && undoStack.Count > 0)
                 {
-                    PushUndo(currentPcmData);
+                    PushUndo(currentPcmData, currentSampleRate);
                 }
 
                 // ALWAYS start from original data for proper resampling (preserves pitch/speed)
