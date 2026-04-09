@@ -350,23 +350,33 @@ namespace WavConvert4Amiga
                 placeRight(checkBoxAutoConvert, row3Y + 5);
 
                 int waveformTop = row3Y + btnQueueClearCompleted.Height + gap;
+                const int listHeight = 68;
+                const int queueHeight = 95;
+                const int bottomHeight = 220;
+
+                int availableForWaveform = ClientSize.Height - waveformTop - listHeight - queueHeight - bottomHeight - (gap * 4) - margin;
+                int waveformHeight = Math.Max(180, Math.Min(340, availableForWaveform));
+
                 panelWaveform.Location = new Point(margin, waveformTop);
-                panelWaveform.Size = new Size(ClientSize.Width - (margin * 2), Math.Max(300, (int)(ClientSize.Height * 0.42f)));
+                panelWaveform.Size = new Size(ClientSize.Width - (margin * 2), waveformHeight);
 
                 int listTop = panelWaveform.Bottom + gap;
-                int dropWidth = Math.Min(430, Math.Max(300, ClientSize.Width / 3));
-                int dropHeight = 250;
-                panel1.Size = new Size(dropWidth, dropHeight);
-                panel1.Location = new Point(ClientSize.Width - margin - panel1.Width, listTop);
+                int dropWidth = Math.Min(430, Math.Max(280, ClientSize.Width / 3));
+                int dropLeft = ClientSize.Width - margin - dropWidth;
+                int listAndGridWidth = Math.Max(320, dropLeft - margin - gap);
 
                 listBoxFiles.Location = new Point(margin, listTop);
-                listBoxFiles.Size = new Size(Math.Max(280, panel1.Left - margin - gap), 68);
+                listBoxFiles.Size = new Size(listAndGridWidth, listHeight);
 
                 dataGridViewQueue.Location = new Point(margin, listBoxFiles.Bottom + gap);
-                dataGridViewQueue.Size = new Size(ClientSize.Width - (margin * 2), 95);
+                dataGridViewQueue.Size = new Size(listAndGridWidth, queueHeight);
 
                 panelBottom.Location = new Point(margin, dataGridViewQueue.Bottom + gap);
-                panelBottom.Size = new Size(ClientSize.Width - (margin * 2), Math.Max(170, ClientSize.Height - panelBottom.Top - margin));
+                panelBottom.Size = new Size(ClientSize.Width - (margin * 2), bottomHeight);
+
+                int dropHeight = Math.Max(180, dataGridViewQueue.Bottom - listTop);
+                panel1.Size = new Size(dropWidth, dropHeight);
+                panel1.Location = new Point(dropLeft, listTop);
 
                 if (recordingPanel != null)
                 {
