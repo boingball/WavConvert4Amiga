@@ -2919,7 +2919,24 @@ namespace WavConvert4Amiga
                 byte[] pcmData;
                 var (oldStart, oldEnd) = waveformViewer.GetLoopPoints();
 
-                if (!string.IsNullOrEmpty(lastLoadedFilePath) && !isRecorded)
+                if (originalPcmData != null && originalFormat != null)
+                {
+                    using (var sourceMs = new MemoryStream())
+                    using (var writer = new WaveFileWriter(sourceMs, originalFormat))
+                    {
+                        writer.Write(originalPcmData, 0, originalPcmData.Length);
+                        writer.Flush();
+                        sourceMs.Position = 0;
+
+                        using (var reader = new WaveFileReader(sourceMs))
+                        using (var resampler = new MediaFoundationResampler(reader, new WaveFormat(targetSampleRate, 8, 1)))
+                        {
+                            resampler.ResamplerQuality = 60;
+                            pcmData = GetPCMData(resampler);
+                        }
+                    }
+                }
+                else if (!string.IsNullOrEmpty(lastLoadedFilePath) && !isRecorded)
                 {
                     string ext = Path.GetExtension(lastLoadedFilePath).ToLower();
                     if (ext == ".8svx")
@@ -2952,24 +2969,6 @@ namespace WavConvert4Amiga
                                 resampler.ResamplerQuality = 60;
                                 pcmData = GetPCMData(resampler);
                             }
-                        }
-                    }
-                }
-                else if (isRecorded && originalPcmData != null)
-                {
-                    using (var sourceMs = new MemoryStream())
-                    {
-                        // Write original data to memory stream
-                        var writer = new WaveFileWriter(sourceMs, originalFormat);
-                        writer.Write(originalPcmData, 0, originalPcmData.Length);
-                        writer.Flush();
-                        sourceMs.Position = 0;
-
-                        using (var reader = new WaveFileReader(sourceMs))
-                        using (var resampler = new MediaFoundationResampler(reader, new WaveFormat(targetSampleRate, 8, 1)))
-                        {
-                            resampler.ResamplerQuality = 60;
-                            pcmData = GetPCMData(resampler);
                         }
                     }
                 }
