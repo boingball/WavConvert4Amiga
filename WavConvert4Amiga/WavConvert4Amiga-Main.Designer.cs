@@ -66,10 +66,10 @@
             this.panel1.BackgroundImage = global::WavConvert4Amiga.Properties.Resources.WC4A_icon;
             this.panel1.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Zoom;
             this.panel1.Controls.Add(this.label2);
-            this.panel1.Location = new System.Drawing.Point(1013, 526);
+            this.panel1.Location = new System.Drawing.Point(1156, 602);
             this.panel1.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.panel1.Name = "panel1";
-            this.panel1.Size = new System.Drawing.Size(478, 324);
+            this.panel1.Size = new System.Drawing.Size(335, 248);
             this.panel1.TabIndex = 2;
             this.panel1.DragDrop += new System.Windows.Forms.DragEventHandler(this.panel1_DragDrop);
             this.panel1.DragEnter += new System.Windows.Forms.DragEventHandler(this.panel1_DragEnter);
@@ -82,12 +82,12 @@
             // 
             this.label2.AutoSize = true;
             this.label2.Font = new System.Drawing.Font("Minecraft Ten", 14.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.label2.Location = new System.Drawing.Point(7, 0);
+            this.label2.Location = new System.Drawing.Point(17, 0);
             this.label2.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             this.label2.Name = "label2";
-            this.label2.Size = new System.Drawing.Size(422, 24);
+            this.label2.Size = new System.Drawing.Size(348, 24);
             this.label2.TabIndex = 0;
-            this.label2.Text = "Drop WAV Files Here / Click to Load";
+            this.label2.Text = "Drop / Load Audio Files Here ";
             this.label2.MouseEnter += new System.EventHandler(this.panel1_MouseEnter);
             this.label2.MouseLeave += new System.EventHandler(this.panel1_MouseLeave);
             this.label2.MouseHover += new System.EventHandler(this.panel1_MouseEnter);
