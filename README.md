@@ -59,6 +59,20 @@ A Windows utility designed to convert WAV/MP3 files for optimal use with Amiga c
 1. Pick any AudioFX one sample is loaded or recorded.
 2. Click Convert Current or set loop points to save sample/section with effects
 
+### Future AudioFX Ideas (for next release)
+- **Bitcrusher / downsample:** Lo-fi grit control with variable sample-rate reduction and quantization depth.
+- **Distortion / overdrive:** Soft-clip and hard-clip options for drums, basses, and aggressive leads.
+- **Chorus / ensemble:** Slight delayed detuned copies to thicken single-cycle and sustained samples.
+- **Flanger / phaser:** Swept comb/notch movement for classic retro movement sounds.
+- **Tremolo / auto-pan (mono tremolo mode):** Rhythmic amplitude modulation for pulse-like textures.
+- **Compressor / limiter:** Simple dynamics control to make converted 8-bit samples punchier and more consistent.
+- **Noise gate / denoise:** Remove low-level hiss or room noise from recordings before conversion.
+- **Transient shaper:** Emphasize attack on drums/percussion so they cut through in tracker mixes.
+- **Band-pass “telephone” EQ:** Useful for voice and FX coloration with minimal CPU-heavy processing.
+- **Reverse + fade-in/out helpers:** Quick one-click sample design tools for transitions and impacts.
+- **ADSR-style volume envelope apply:** Bake attack/decay/release directly into one-shot samples.
+- **Stereo-to-mono blend modes:** Mid/side-inspired collapse choices to reduce phase cancellation when importing stereo material.
+
 
 ### Keyboard Shortcuts
 - `Ctrl+Z`: Undo

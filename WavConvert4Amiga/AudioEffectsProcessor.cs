@@ -140,6 +140,200 @@ namespace WavConvert4Amiga
                 SetNormalCursor();
             }
         }
+
+        public byte[] ApplyOverdriveEffect(byte[] input, float drive = 2.2f)
+        {
+            try
+            {
+                SetBusyCursor();
+                float[] samples = new float[input.Length];
+                for (int i = 0; i < input.Length; i++)
+                {
+                    float sample = (input[i] - 128) / 128.0f;
+                    samples[i] = (float)Math.Tanh(sample * drive);
+                }
+
+                return ConvertToBytes(samples, 1.0f);
+            }
+            finally
+            {
+                SetNormalCursor();
+            }
+        }
+
+        public byte[] ApplyChorusEffect(byte[] input, int sampleRate)
+        {
+            try
+            {
+                SetBusyCursor();
+                float[] dry = new float[input.Length];
+                for (int i = 0; i < input.Length; i++)
+                {
+                    dry[i] = (input[i] - 128) / 128.0f;
+                }
+
+                float[] wet = new float[input.Length];
+                float lfoRateHz = 0.9f;
+                float minDelayMs = 7.0f;
+                float depthMs = 10.0f;
+
+                for (int i = 0; i < dry.Length; i++)
+                {
+                    float t = (float)i / sampleRate;
+                    float lfo = (float)((Math.Sin(2 * Math.PI * lfoRateHz * t) + 1.0) * 0.5);
+                    float delayMs = minDelayMs + (depthMs * lfo);
+                    int delaySamples = Math.Max(1, (int)(sampleRate * delayMs / 1000.0f));
+
+                    float delayed = 0;
+                    int delayedIndex = i - delaySamples;
+                    if (delayedIndex >= 0)
+                    {
+                        delayed = dry[delayedIndex];
+                    }
+
+                    wet[i] = (dry[i] * 0.7f) + (delayed * 0.45f);
+                }
+
+                return ConvertToBytes(wet, 1.0f);
+            }
+            finally
+            {
+                SetNormalCursor();
+            }
+        }
+
+        public byte[] ApplyReverseEffect(byte[] input)
+        {
+            try
+            {
+                SetBusyCursor();
+                byte[] output = new byte[input.Length];
+                for (int i = 0; i < input.Length; i++)
+                {
+                    output[i] = input[input.Length - 1 - i];
+                }
+                return output;
+            }
+            finally
+            {
+                SetNormalCursor();
+            }
+        }
+
+        public byte[] ApplyFadeIn(byte[] input)
+        {
+            try
+            {
+                SetBusyCursor();
+                float[] output = new float[input.Length];
+                int len = Math.Max(1, input.Length - 1);
+                for (int i = 0; i < input.Length; i++)
+                {
+                    float gain = (float)i / len;
+                    float sample = (input[i] - 128) / 128.0f;
+                    output[i] = sample * gain;
+                }
+                return ConvertToBytes(output, 1.0f);
+            }
+            finally
+            {
+                SetNormalCursor();
+            }
+        }
+
+        public byte[] ApplyFadeOut(byte[] input)
+        {
+            try
+            {
+                SetBusyCursor();
+                float[] output = new float[input.Length];
+                int len = Math.Max(1, input.Length - 1);
+                for (int i = 0; i < input.Length; i++)
+                {
+                    float gain = 1.0f - ((float)i / len);
+                    float sample = (input[i] - 128) / 128.0f;
+                    output[i] = sample * gain;
+                }
+                return ConvertToBytes(output, 1.0f);
+            }
+            finally
+            {
+                SetNormalCursor();
+            }
+        }
+
+        public byte[] ApplyBandPassEffect(byte[] input, int sampleRate, double centerFrequency, double qFactor)
+        {
+            try
+            {
+                SetBusyCursor();
+                double w0 = 2.0 * Math.PI * centerFrequency / sampleRate;
+                double alpha = Math.Sin(w0) / (2.0 * Math.Max(0.1, qFactor));
+                double cosW0 = Math.Cos(w0);
+
+                // Biquad band-pass (constant skirt gain)
+                double b0 = alpha;
+                double b1 = 0.0;
+                double b2 = -alpha;
+                double a0 = 1.0 + alpha;
+                double a1 = -2.0 * cosW0;
+                double a2 = 1.0 - alpha;
+
+                b0 /= a0; b1 /= a0; b2 /= a0;
+                a1 /= a0; a2 /= a0;
+
+                float[] output = new float[input.Length];
+                float x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+
+                for (int i = 0; i < input.Length; i++)
+                {
+                    float x0 = (input[i] - 128) / 128.0f;
+                    float y0 = (float)(b0 * x0 + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2);
+                    output[i] = y0;
+                    x2 = x1; x1 = x0;
+                    y2 = y1; y1 = y0;
+                }
+
+                return ConvertToBytes(output, 1.5f);
+            }
+            finally
+            {
+                SetNormalCursor();
+            }
+        }
+
+        public byte[] ApplyNoiseGate(byte[] input, float threshold = 0.05f, float release = 0.995f)
+        {
+            try
+            {
+                SetBusyCursor();
+                float[] output = new float[input.Length];
+                float gain = 1.0f;
+
+                for (int i = 0; i < input.Length; i++)
+                {
+                    float sample = (input[i] - 128) / 128.0f;
+                    float abs = Math.Abs(sample);
+
+                    if (abs >= threshold)
+                    {
+                        gain = 1.0f;
+                    }
+                    else
+                    {
+                        gain *= release;
+                    }
+
+                    output[i] = sample * gain;
+                }
+
+                return ConvertToBytes(output, 1.0f);
+            }
+            finally
+            {
+                SetNormalCursor();
+            }
+        }
         private static readonly int[] vocalFreqs = { 200, 400, 800, 1600, 2400, 3200 }; // Key vocal frequencies
 
         // Apply vocal removal effect (using frequency-based approach for mono)

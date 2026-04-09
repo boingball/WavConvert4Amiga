@@ -1276,6 +1276,30 @@ namespace WavConvert4Amiga
                             case "vocal":
                                 result = audioEffects.ApplyVocalRemoval(result, targetSampleRate);
                                 break;
+                            case "chorus":
+                                result = audioEffects.ApplyChorusEffect(result, targetSampleRate);
+                                break;
+                            case "overdrive":
+                                result = audioEffects.ApplyOverdriveEffect(result);
+                                break;
+                            case "reverse":
+                                result = audioEffects.ApplyReverseEffect(result);
+                                break;
+                            case "fadein":
+                                result = audioEffects.ApplyFadeIn(result);
+                                break;
+                            case "fadeout":
+                                result = audioEffects.ApplyFadeOut(result);
+                                break;
+                            case "bandpass_telephone":
+                                result = audioEffects.ApplyBandPassEffect(result, targetSampleRate, 1800.0, 0.9);
+                                break;
+                            case "bandpass_amradio":
+                                result = audioEffects.ApplyBandPassEffect(result, targetSampleRate, 1200.0, 0.7);
+                                break;
+                            case "noisegate":
+                                result = audioEffects.ApplyNoiseGate(result, 0.04f, 0.992f);
+                                break;
                         }
                     }
                 }
@@ -2158,7 +2182,7 @@ namespace WavConvert4Amiga
             effectsPanel = new Panel
             {
                 Location = new Point(panelBottom.Width - 300, 10),
-                Size = new Size(280, 200),
+                Size = new Size(280, 225),
                 BackColor = Color.FromArgb(180, 190, 210)
             };
             AddBevelToPanel(effectsPanel);
@@ -2173,31 +2197,51 @@ namespace WavConvert4Amiga
             };
             effectsPanel.Controls.Add(labelEffects);
 
-            // Create effect buttons
-            var buttonY = 30;
-            CreateEffectButton("Underwater Effect", new Point(10, buttonY), effectsPanel, ApplyUnderwaterEffect);
-            CreateEffectButton("Robot Voice", new Point(150, buttonY), effectsPanel, ApplyRobotEffect);
+            // Create effect buttons in a 3-column grid to avoid clipping.
+            int leftMargin = 10;
+            int topMargin = 30;
+            int columnWidth = 84;
+            int rowHeight = 30;
+            int columnSpacing = 4;
 
-            buttonY += 30;
-            CreateEffectButton("High Pitch", new Point(10, buttonY), effectsPanel, ApplyHighPitchEffect);
-            CreateEffectButton("Low Pitch", new Point(150, buttonY), effectsPanel, ApplyLowPitchEffect);
+            var buttons = new (string Text, EventHandler Handler)[]
+            {
+                ("Underwater", ApplyUnderwaterEffect),
+                ("Robot Voice", ApplyRobotEffect),
+                ("High Pitch", ApplyHighPitchEffect),
+                ("Low Pitch", ApplyLowPitchEffect),
+                ("Echo", ApplyEchoEffect),
+                ("Vocal Remove", ApplyVocalRemovalEffect),
+                ("Chorus", ApplyChorusEffect),
+                ("Overdrive", ApplyOverdriveEffect),
+                ("Reverse", ApplyReverseEffect),
+                ("Noise Gate", ApplyNoiseGateEffect),
+                ("Fade In", ApplyFadeInEffect),
+                ("Fade Out", ApplyFadeOutEffect),
+                ("Telephone BP", ApplyTelephoneBandPassEffect),
+                ("AM Radio BP", ApplyAmRadioBandPassEffect),
+                ("Reset", ResetEffects)
+            };
 
-            buttonY += 30;
-            CreateEffectButton("Echo Effect", new Point(10, buttonY), effectsPanel, ApplyEchoEffect);
-            CreateEffectButton("Vocal Remove", new Point(150, buttonY), effectsPanel, ApplyVocalRemovalEffect);
+            for (int i = 0; i < buttons.Length; i++)
+            {
+                int row = i / 3;
+                int column = i % 3;
+                int x = leftMargin + (column * (columnWidth + columnSpacing));
+                int y = topMargin + (row * rowHeight);
+                CreateEffectButton(buttons[i].Text, new Point(x, y), effectsPanel, buttons[i].Handler, new Size(columnWidth, 28));
+            }
 
-            buttonY += 30;
-            CreateEffectButton("Reset Effects", new Point(10, buttonY), effectsPanel, ResetEffects);
             panelBottom.Controls.Add(effectsPanel);
         }
 
-        private void CreateEffectButton(string text, Point location, Panel parent, EventHandler clickHandler)
+        private void CreateEffectButton(string text, Point location, Panel parent, EventHandler clickHandler, Size? sizeOverride = null)
         {
             RetroButton button = new RetroButton
             {
                 Text = text,
                 Location = location,
-                Size = new Size(120, 30)
+                Size = sizeOverride ?? new Size(120, 30)
             };
             button.Click += clickHandler;
             parent.Controls.Add(button);
@@ -2314,6 +2358,30 @@ namespace WavConvert4Amiga
                     case "vocal":
                         currentPcmData = audioEffects.ApplyVocalRemoval(currentPcmData, targetSampleRate);
                         break;
+                    case "chorus":
+                        currentPcmData = audioEffects.ApplyChorusEffect(currentPcmData, targetSampleRate);
+                        break;
+                    case "overdrive":
+                        currentPcmData = audioEffects.ApplyOverdriveEffect(currentPcmData);
+                        break;
+                    case "reverse":
+                        currentPcmData = audioEffects.ApplyReverseEffect(currentPcmData);
+                        break;
+                    case "fadein":
+                        currentPcmData = audioEffects.ApplyFadeIn(currentPcmData);
+                        break;
+                    case "fadeout":
+                        currentPcmData = audioEffects.ApplyFadeOut(currentPcmData);
+                        break;
+                    case "bandpass_telephone":
+                        currentPcmData = audioEffects.ApplyBandPassEffect(currentPcmData, targetSampleRate, 1800.0, 0.9);
+                        break;
+                    case "bandpass_amradio":
+                        currentPcmData = audioEffects.ApplyBandPassEffect(currentPcmData, targetSampleRate, 1200.0, 0.7);
+                        break;
+                    case "noisegate":
+                        currentPcmData = audioEffects.ApplyNoiseGate(currentPcmData, 0.04f, 0.992f);
+                        break;
                 }
 
                 waveformViewer.SetAudioData(currentPcmData);
@@ -2394,6 +2462,136 @@ namespace WavConvert4Amiga
         private void ApplyEchoEffect(object sender, EventArgs e)
         {
             ApplyTrackedEffect("echo", () => audioEffects.ApplyEchoEffect(currentPcmData, GetSelectedSampleRate()));
+        }
+
+        private void ApplyChorusEffect(object sender, EventArgs e)
+        {
+            ApplyTrackedEffect("chorus", () => audioEffects.ApplyChorusEffect(currentPcmData, GetSelectedSampleRate()));
+        }
+
+        private void ApplyOverdriveEffect(object sender, EventArgs e)
+        {
+            ApplyTrackedEffect("overdrive", () => audioEffects.ApplyOverdriveEffect(currentPcmData));
+        }
+
+        private void ApplyReverseEffect(object sender, EventArgs e)
+        {
+            ApplyTrackedEffect("reverse", () => ApplySelectionEffect(selection => audioEffects.ApplyReverseEffect(selection), "Reverse"));
+        }
+
+        private void ApplyFadeInEffect(object sender, EventArgs e)
+        {
+            ApplyTrackedEffect("fadein", () => ApplyFadeInSelectionOrMarker());
+        }
+
+        private void ApplyFadeOutEffect(object sender, EventArgs e)
+        {
+            ApplyTrackedEffect("fadeout", () => ApplyFadeOutSelectionOrMarker());
+        }
+
+        private void ApplyTelephoneBandPassEffect(object sender, EventArgs e)
+        {
+            ApplyTrackedEffect("bandpass_telephone", () => audioEffects.ApplyBandPassEffect(currentPcmData, GetSelectedSampleRate(), 1800.0, 0.9));
+        }
+
+        private void ApplyAmRadioBandPassEffect(object sender, EventArgs e)
+        {
+            ApplyTrackedEffect("bandpass_amradio", () => audioEffects.ApplyBandPassEffect(currentPcmData, GetSelectedSampleRate(), 1200.0, 0.7));
+        }
+
+        private void ApplyNoiseGateEffect(object sender, EventArgs e)
+        {
+            ApplyTrackedEffect("noisegate", () => audioEffects.ApplyNoiseGate(currentPcmData, 0.04f, 0.992f));
+        }
+
+        private byte[] ApplySelectionEffect(Func<byte[], byte[]> effectFunction, string effectLabel)
+        {
+            var (loopStart, loopEnd) = waveformViewer.GetLoopPoints();
+
+            if (loopStart >= 0 && loopEnd > loopStart && loopEnd <= currentPcmData.Length)
+            {
+                int selectionLength = loopEnd - loopStart;
+                byte[] selectedData = new byte[selectionLength];
+                Array.Copy(currentPcmData, loopStart, selectedData, 0, selectionLength);
+
+                byte[] processedSelection = effectFunction(selectedData);
+                if (processedSelection == null || processedSelection.Length != selectionLength)
+                {
+                    AddToListBox($"{effectLabel}: selection processing returned invalid length, selection left unchanged.");
+                    return currentPcmData;
+                }
+
+                byte[] output = new byte[currentPcmData.Length];
+                Array.Copy(currentPcmData, output, currentPcmData.Length);
+                Array.Copy(processedSelection, 0, output, loopStart, selectionLength);
+                AddToListBox($"{effectLabel} applied to loop selection {loopStart}-{loopEnd}.");
+                return output;
+            }
+
+            AddToListBox($"{effectLabel} applied to full sample (no loop selection set).");
+            return effectFunction(currentPcmData);
+        }
+
+        private byte[] ApplyFadeInSelectionOrMarker()
+        {
+            var (loopStart, loopEnd) = waveformViewer.GetLoopPoints();
+            return ApplyFadeWithRange(loopStart, loopEnd, true);
+        }
+
+        private byte[] ApplyFadeOutSelectionOrMarker()
+        {
+            var (loopStart, loopEnd) = waveformViewer.GetLoopPoints();
+            return ApplyFadeWithRange(loopStart, loopEnd, false);
+        }
+
+        private byte[] ApplyFadeWithRange(int loopStart, int loopEnd, bool fadeIn)
+        {
+            int dataLength = currentPcmData.Length;
+            int rangeStart;
+            int rangeEndExclusive;
+            string fadeName = fadeIn ? "Fade In" : "Fade Out";
+
+            if (loopStart >= 0 && loopEnd > loopStart && loopEnd <= dataLength)
+            {
+                // Two-point selection: fade only inside the selected range.
+                rangeStart = loopStart;
+                rangeEndExclusive = loopEnd;
+                AddToListBox($"{fadeName} applied to loop selection {loopStart}-{loopEnd}.");
+            }
+            else if (loopStart >= 0 && loopEnd == -1 && loopStart < dataLength)
+            {
+                // Single marker: fade in up to marker, or fade out from marker.
+                if (fadeIn)
+                {
+                    rangeStart = 0;
+                    rangeEndExclusive = Math.Max(1, loopStart + 1);
+                    AddToListBox($"{fadeName} applied from start to marker {loopStart}.");
+                }
+                else
+                {
+                    rangeStart = loopStart;
+                    rangeEndExclusive = dataLength;
+                    AddToListBox($"{fadeName} applied from marker {loopStart} to end.");
+                }
+            }
+            else
+            {
+                // No points set: fade entire sample.
+                rangeStart = 0;
+                rangeEndExclusive = dataLength;
+                AddToListBox($"{fadeName} applied to full sample (no loop selection set).");
+            }
+
+            int rangeLength = Math.Max(1, rangeEndExclusive - rangeStart);
+            byte[] rangeData = new byte[rangeLength];
+            Array.Copy(currentPcmData, rangeStart, rangeData, 0, rangeLength);
+
+            byte[] processed = fadeIn ? audioEffects.ApplyFadeIn(rangeData) : audioEffects.ApplyFadeOut(rangeData);
+
+            byte[] output = new byte[dataLength];
+            Array.Copy(currentPcmData, output, dataLength);
+            Array.Copy(processed, 0, output, rangeStart, Math.Min(processed.Length, rangeLength));
+            return output;
         }
 
         private void ResetEffects(object sender, EventArgs e)
@@ -2577,6 +2775,30 @@ namespace WavConvert4Amiga
                             break;
                         case "vocal":
                             result = audioEffects.ApplyVocalRemoval(result, targetSampleRate);
+                            break;
+                        case "chorus":
+                            result = audioEffects.ApplyChorusEffect(result, targetSampleRate);
+                            break;
+                        case "overdrive":
+                            result = audioEffects.ApplyOverdriveEffect(result);
+                            break;
+                        case "reverse":
+                            result = audioEffects.ApplyReverseEffect(result);
+                            break;
+                        case "fadein":
+                            result = audioEffects.ApplyFadeIn(result);
+                            break;
+                        case "fadeout":
+                            result = audioEffects.ApplyFadeOut(result);
+                            break;
+                        case "bandpass_telephone":
+                            result = audioEffects.ApplyBandPassEffect(result, targetSampleRate, 1800.0, 0.9);
+                            break;
+                        case "bandpass_amradio":
+                            result = audioEffects.ApplyBandPassEffect(result, targetSampleRate, 1200.0, 0.7);
+                            break;
+                        case "noisegate":
+                            result = audioEffects.ApplyNoiseGate(result, 0.04f, 0.992f);
                             break;
                     }
                 }
