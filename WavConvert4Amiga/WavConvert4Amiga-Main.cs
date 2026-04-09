@@ -2919,10 +2919,30 @@ namespace WavConvert4Amiga
                 byte[] pcmData;
                 var (oldStart, oldEnd) = waveformViewer.GetLoopPoints();
 
-                if (!string.IsNullOrEmpty(lastLoadedFilePath) && !isRecorded)
+                if (!isRecorded && originalPcmData != null && originalFormat != null)
                 {
+                    using (var sourceMs = new MemoryStream())
+                    {
+                        using (var writer = new WaveFileWriter(sourceMs, originalFormat))
+                        {
+                            writer.Write(originalPcmData, 0, originalPcmData.Length);
+                            writer.Flush();
+                            sourceMs.Position = 0;
+
+                            using (var reader = new WaveFileReader(sourceMs))
+                            using (var resampler = new MediaFoundationResampler(reader, new WaveFormat(targetSampleRate, 8, 1)))
+                            {
+                                resampler.ResamplerQuality = 60;
+                                pcmData = GetPCMData(resampler);
+                            }
+                        }
+                    }
+                }
+                else if (!string.IsNullOrEmpty(lastLoadedFilePath) && !isRecorded)
+                {
+                    // Fallback path for older queue entries where in-memory source state is unavailable.
                     string ext = Path.GetExtension(lastLoadedFilePath).ToLower();
-                    if (ext == ".8svx")
+                    if (ext == ".8svx" || ext == ".iff")
                     {
                         var svxInfo = SVXLoader.Load8SVXFile(lastLoadedFilePath);
                         using (var sourceMs = new MemoryStream())
@@ -2943,24 +2963,30 @@ namespace WavConvert4Amiga
                             }
                         }
                     }
+                    else if (ext == ".mp3")
+                    {
+                        using (var reader = new MediaFoundationReader(lastLoadedFilePath))
+                        using (var resampler = new MediaFoundationResampler(reader, new WaveFormat(targetSampleRate, 8, 1)))
+                        {
+                            resampler.ResamplerQuality = 60;
+                            pcmData = GetPCMData(resampler);
+                        }
+                    }
                     else
                     {
                         using (var reader = new WaveFileReader(lastLoadedFilePath))
+                        using (var resampler = new MediaFoundationResampler(reader, new WaveFormat(targetSampleRate, 8, 1)))
                         {
-                            using (var resampler = new MediaFoundationResampler(reader, new WaveFormat(targetSampleRate, 8, 1)))
-                            {
-                                resampler.ResamplerQuality = 60;
-                                pcmData = GetPCMData(resampler);
-                            }
+                            resampler.ResamplerQuality = 60;
+                            pcmData = GetPCMData(resampler);
                         }
                     }
                 }
-                else if (isRecorded && originalPcmData != null)
+                else if (isRecorded && originalPcmData != null && originalFormat != null)
                 {
                     using (var sourceMs = new MemoryStream())
+                    using (var writer = new WaveFileWriter(sourceMs, originalFormat))
                     {
-                        // Write original data to memory stream
-                        var writer = new WaveFileWriter(sourceMs, originalFormat);
                         writer.Write(originalPcmData, 0, originalPcmData.Length);
                         writer.Flush();
                         sourceMs.Position = 0;
