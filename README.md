@@ -1,12 +1,13 @@
 # WavConvert4Amiga
 
-A Windows utility designed to convert WAV files for optimal use with Amiga computers and music trackers. Features an intuitive interface for sample rate conversion, waveform editing, and ProTracker note tuning.
+A Windows utility designed to convert WAV/MP3 files for optimal use with Amiga computers and music trackers. Features an intuitive interface for sample rate conversion, waveform editing, and ProTracker note tuning.
 
 ![WavConvert4Amiga GUI v1.2](wc4a-gui-1.2.jpeg?raw=true "Title")
 ## Features
 
 ### Audio Processing
 - Convert WAV files to 8-bit mono format at any sample rate
+- Load MP3 files and decode them into the same editable workflow as WAV files
 - Support for both PAL and NTSC frequencies
 - ProTracker note frequency conversion (C-1 to B-3)
 - Built-in low-pass filter option
@@ -28,7 +29,7 @@ A Windows utility designed to convert WAV files for optimal use with Amiga compu
 - Visual feedback during recording
 
 ### File Handling
-- Drag and drop WAV file support
+- Drag and drop WAV/MP3 file support
 - Auto-convert option for batch processing
 - Original file preservation option
 - Save as WAV or 8SVX format
@@ -37,7 +38,7 @@ A Windows utility designed to convert WAV files for optimal use with Amiga compu
 ## Usage
 
 ### Basic Operation
-1. Drag and drop a WAV file onto the interface
+1. Drag and drop a WAV or MP3 file onto the interface
 2. Select desired sample rate or ProTracker note
 3. Adjust amplification if needed
 4. Enable low-pass filter if desired
