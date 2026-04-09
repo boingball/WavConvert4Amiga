@@ -101,7 +101,7 @@
             this.listBoxFiles.Location = new System.Drawing.Point(22, 526);
             this.listBoxFiles.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.listBoxFiles.Name = "listBoxFiles";
-            this.listBoxFiles.Size = new System.Drawing.Size(951, 100);
+            this.listBoxFiles.Size = new System.Drawing.Size(1069, 64);
             this.listBoxFiles.TabIndex = 4;
             // 
             // comboBoxSampleRate
@@ -195,16 +195,16 @@
             this.dataGridViewQueue.AllowUserToAddRows = false;
             this.dataGridViewQueue.AllowUserToDeleteRows = false;
             this.dataGridViewQueue.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            this.dataGridViewQueue.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)
-            | System.Windows.Forms.AnchorStyles.Left)));
-            this.dataGridViewQueue.Location = new System.Drawing.Point(0, 0);
+            this.dataGridViewQueue.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.dataGridViewQueue.Location = new System.Drawing.Point(25, 728);
             this.dataGridViewQueue.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.dataGridViewQueue.Name = "dataGridViewQueue";
             this.dataGridViewQueue.ReadOnly = true;
             this.dataGridViewQueue.RowHeadersVisible = false;
             this.dataGridViewQueue.RowHeadersWidth = 62;
             this.dataGridViewQueue.RowTemplate.Height = 28;
-            this.dataGridViewQueue.Size = new System.Drawing.Size(760, 275);
+            this.dataGridViewQueue.Size = new System.Drawing.Size(1069, 54);
             this.dataGridViewQueue.TabIndex = 0;
             // 
             // btnQueueAddFiles
@@ -272,6 +272,7 @@
             this.ClientSize = new System.Drawing.Size(1507, 844);
             this.Controls.Add(this.btnQueueStart);
             this.Controls.Add(this.panelBottom);
+            this.Controls.Add(this.dataGridViewQueue);
             this.Controls.Add(this.btnQueueClearCompleted);
             this.Controls.Add(this.btnQueueStop);
             this.Controls.Add(this.btnQueueStart);
