@@ -3617,7 +3617,7 @@ namespace WavConvert4Amiga
         {
             using (OpenFileDialog dialog = new OpenFileDialog())
             {
-                dialog.Filter = "Audio files (*.wav;*.mp3;*.8svx;*.iff)|*.wav;*.mp3;*.8svx;*.iff|All files (*.*)|*.*";
+                dialog.Filter = "Audio files (*.wav;*.8svx;*.iff)|*.wav;*.8svx;*.iff|All files (*.*)|*.*";
                 dialog.Multiselect = true;
 
                 if (dialog.ShowDialog() == DialogResult.OK)

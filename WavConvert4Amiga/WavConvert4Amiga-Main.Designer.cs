@@ -184,7 +184,7 @@
             // panelBottom
             // 
             this.panelBottom.Controls.Add(this.dataGridViewQueue);
-            this.panelBottom.Location = new System.Drawing.Point(23, 630);
+            this.panelBottom.Location = new System.Drawing.Point(26, 788);
             this.panelBottom.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.panelBottom.Name = "panelBottom";
             this.panelBottom.Size = new System.Drawing.Size(950, 220);
@@ -195,7 +195,8 @@
             this.dataGridViewQueue.AllowUserToAddRows = false;
             this.dataGridViewQueue.AllowUserToDeleteRows = false;
             this.dataGridViewQueue.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            this.dataGridViewQueue.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.dataGridViewQueue.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)
+            | System.Windows.Forms.AnchorStyles.Left)));
             this.dataGridViewQueue.Location = new System.Drawing.Point(0, 0);
             this.dataGridViewQueue.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.dataGridViewQueue.Name = "dataGridViewQueue";
@@ -203,15 +204,15 @@
             this.dataGridViewQueue.RowHeadersVisible = false;
             this.dataGridViewQueue.RowHeadersWidth = 62;
             this.dataGridViewQueue.RowTemplate.Height = 28;
-            this.dataGridViewQueue.Size = new System.Drawing.Size(950, 220);
+            this.dataGridViewQueue.Size = new System.Drawing.Size(760, 275);
             this.dataGridViewQueue.TabIndex = 0;
             // 
             // btnQueueAddFiles
             // 
-            this.btnQueueAddFiles.Location = new System.Drawing.Point(219, 43);
+            this.btnQueueAddFiles.Location = new System.Drawing.Point(246, 52);
             this.btnQueueAddFiles.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.btnQueueAddFiles.Name = "btnQueueAddFiles";
-            this.btnQueueAddFiles.Size = new System.Drawing.Size(129, 27);
+            this.btnQueueAddFiles.Size = new System.Drawing.Size(145, 34);
             this.btnQueueAddFiles.TabIndex = 12;
             this.btnQueueAddFiles.Text = "Add Files...";
             this.btnQueueAddFiles.UseVisualStyleBackColor = true;
@@ -219,10 +220,10 @@
             // 
             // btnQueueStart
             // 
-            this.btnQueueStart.Location = new System.Drawing.Point(352, 43);
+            this.btnQueueStart.Location = new System.Drawing.Point(397, 52);
             this.btnQueueStart.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.btnQueueStart.Name = "btnQueueStart";
-            this.btnQueueStart.Size = new System.Drawing.Size(129, 27);
+            this.btnQueueStart.Size = new System.Drawing.Size(145, 34);
             this.btnQueueStart.TabIndex = 13;
             this.btnQueueStart.Text = "Start Queue";
             this.btnQueueStart.UseVisualStyleBackColor = true;
@@ -230,10 +231,10 @@
             // 
             // btnQueueStop
             // 
-            this.btnQueueStop.Location = new System.Drawing.Point(487, 42);
+            this.btnQueueStop.Location = new System.Drawing.Point(548, 52);
             this.btnQueueStop.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.btnQueueStop.Name = "btnQueueStop";
-            this.btnQueueStop.Size = new System.Drawing.Size(129, 27);
+            this.btnQueueStop.Size = new System.Drawing.Size(145, 34);
             this.btnQueueStop.TabIndex = 14;
             this.btnQueueStop.Text = "Pause/Stop";
             this.btnQueueStop.UseVisualStyleBackColor = true;
@@ -241,10 +242,10 @@
             // 
             // btnQueueClearCompleted
             // 
-            this.btnQueueClearCompleted.Location = new System.Drawing.Point(621, 42);
+            this.btnQueueClearCompleted.Location = new System.Drawing.Point(699, 52);
             this.btnQueueClearCompleted.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.btnQueueClearCompleted.Name = "btnQueueClearCompleted";
-            this.btnQueueClearCompleted.Size = new System.Drawing.Size(151, 27);
+            this.btnQueueClearCompleted.Size = new System.Drawing.Size(170, 34);
             this.btnQueueClearCompleted.TabIndex = 15;
             this.btnQueueClearCompleted.Text = "Clear Completed";
             this.btnQueueClearCompleted.UseVisualStyleBackColor = true;
@@ -271,9 +272,10 @@
             this.ClientSize = new System.Drawing.Size(1507, 844);
             this.Controls.Add(this.btnQueueStart);
             this.Controls.Add(this.panelBottom);
-            this.Controls.Add(this.btnQueueAddFiles);
             this.Controls.Add(this.btnQueueClearCompleted);
             this.Controls.Add(this.btnQueueStop);
+            this.Controls.Add(this.btnQueueStart);
+            this.Controls.Add(this.btnQueueAddFiles);
             this.Controls.Add(this.btnManualConvert);
             this.Controls.Add(this.panelWaveform);
             this.Controls.Add(this.listBoxFiles);
