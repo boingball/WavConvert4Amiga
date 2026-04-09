@@ -76,6 +76,7 @@ namespace WavConvert4Amiga
         private readonly Dictionary<QueueItem, DataGridViewRow> queueRows = new Dictionary<QueueItem, DataGridViewRow>();
         private bool isQueueRunning = false;
         private bool queueStopRequested = false;
+        private Size previousClientSize;
         private Label labelPTNote;
         private Panel recordingPanel;
         private Panel effectsPanel;
@@ -288,6 +289,11 @@ namespace WavConvert4Amiga
                 return;
             }
 
+            if (previousClientSize == this.ClientSize)
+            {
+                return;
+            }
+
             SuspendLayout();
             try
             {
@@ -374,6 +380,7 @@ namespace WavConvert4Amiga
             }
             finally
             {
+                previousClientSize = this.ClientSize;
                 ResumeLayout(true);
             }
         }
