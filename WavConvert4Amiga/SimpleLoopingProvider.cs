@@ -13,7 +13,6 @@ namespace WavConvert4Amiga
         private readonly int loopStartSample;
         private readonly int loopEndSample;
         private int position = 0;
-        private readonly int startPosition;
         private bool enableLooping;
 
         public SimpleLoopingProvider(ISampleProvider sourceProvider, int loopStartSample, int loopEndSample, bool enableLooping = true)
@@ -22,7 +21,6 @@ namespace WavConvert4Amiga
             this.loopStartSample = loopStartSample;
             this.loopEndSample = loopEndSample;
             this.enableLooping = enableLooping;
-            this.startPosition = 0;
         }
 
         public WaveFormat WaveFormat => sourceProvider.WaveFormat;
