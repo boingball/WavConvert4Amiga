@@ -259,6 +259,7 @@ namespace WavConvert4Amiga
 
         private void MainForm_Load(object sender, EventArgs e)
         {
+            previousClientSize = this.ClientSize;
             panel1.AllowDrop = true;
             panel1.DragEnter += panel1_DragEnter;
             panel1.DragDrop += panel1_DragDrop;
