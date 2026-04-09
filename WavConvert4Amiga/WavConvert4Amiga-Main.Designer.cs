@@ -171,10 +171,10 @@
             // 
             // btnManualConvert
             // 
-            this.btnManualConvert.Location = new System.Drawing.Point(22, 42);
+            this.btnManualConvert.Location = new System.Drawing.Point(22, 44);
             this.btnManualConvert.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.btnManualConvert.Name = "btnManualConvert";
-            this.btnManualConvert.Size = new System.Drawing.Size(191, 27);
+            this.btnManualConvert.Size = new System.Drawing.Size(149, 31);
             this.btnManualConvert.TabIndex = 11;
             this.btnManualConvert.Text = "Convert Current";
             this.btnManualConvert.UseVisualStyleBackColor = true;
@@ -207,45 +207,45 @@
             // 
             // btnQueueAddFiles
             // 
-            this.btnQueueAddFiles.Location = new System.Drawing.Point(222, 38);
+            this.btnQueueAddFiles.Location = new System.Drawing.Point(222, 44);
             this.btnQueueAddFiles.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.btnQueueAddFiles.Name = "btnQueueAddFiles";
-            this.btnQueueAddFiles.Size = new System.Drawing.Size(145, 34);
+            this.btnQueueAddFiles.Size = new System.Drawing.Size(145, 31);
             this.btnQueueAddFiles.TabIndex = 12;
-            this.btnQueueAddFiles.Text = "Add Files...";
+            this.btnQueueAddFiles.Text = "Queue: Add Files.";
             this.btnQueueAddFiles.UseVisualStyleBackColor = true;
             this.btnQueueAddFiles.Click += new System.EventHandler(this.btnQueueAddFiles_Click);
             // 
             // btnQueueStart
             // 
-            this.btnQueueStart.Location = new System.Drawing.Point(373, 38);
+            this.btnQueueStart.Location = new System.Drawing.Point(373, 44);
             this.btnQueueStart.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.btnQueueStart.Name = "btnQueueStart";
-            this.btnQueueStart.Size = new System.Drawing.Size(145, 34);
+            this.btnQueueStart.Size = new System.Drawing.Size(145, 31);
             this.btnQueueStart.TabIndex = 13;
-            this.btnQueueStart.Text = "Start Queue";
+            this.btnQueueStart.Text = "Process Queue";
             this.btnQueueStart.UseVisualStyleBackColor = true;
             this.btnQueueStart.Click += new System.EventHandler(this.btnQueueStart_Click);
             // 
             // btnQueueStop
             // 
-            this.btnQueueStop.Location = new System.Drawing.Point(524, 38);
+            this.btnQueueStop.Location = new System.Drawing.Point(524, 44);
             this.btnQueueStop.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.btnQueueStop.Name = "btnQueueStop";
-            this.btnQueueStop.Size = new System.Drawing.Size(145, 34);
+            this.btnQueueStop.Size = new System.Drawing.Size(145, 31);
             this.btnQueueStop.TabIndex = 14;
-            this.btnQueueStop.Text = "Pause/Stop";
+            this.btnQueueStop.Text = "Queue Pause/Stop";
             this.btnQueueStop.UseVisualStyleBackColor = true;
             this.btnQueueStop.Click += new System.EventHandler(this.btnQueueStop_Click);
             // 
             // btnQueueClearCompleted
             // 
-            this.btnQueueClearCompleted.Location = new System.Drawing.Point(675, 38);
+            this.btnQueueClearCompleted.Location = new System.Drawing.Point(675, 44);
             this.btnQueueClearCompleted.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.btnQueueClearCompleted.Name = "btnQueueClearCompleted";
-            this.btnQueueClearCompleted.Size = new System.Drawing.Size(170, 34);
+            this.btnQueueClearCompleted.Size = new System.Drawing.Size(170, 31);
             this.btnQueueClearCompleted.TabIndex = 15;
-            this.btnQueueClearCompleted.Text = "Clear Completed";
+            this.btnQueueClearCompleted.Text = "Queue Clear Completed";
             this.btnQueueClearCompleted.UseVisualStyleBackColor = true;
             this.btnQueueClearCompleted.Click += new System.EventHandler(this.btnQueueClearCompleted_Click);
             // 
@@ -286,10 +286,8 @@
             this.Controls.Add(this.checkBoxEnable8SVX);
             this.Controls.Add(this.checkBox16BitWAV);
             this.DoubleBuffered = true;
-            this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.Sizable;
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
-            this.MaximizeBox = true;
             this.Name = "MainForm";
             this.Text = "SoundConvert4Amiga";
             this.Load += new System.EventHandler(this.MainForm_Load);
