@@ -254,7 +254,7 @@ namespace WavConvert4Amiga
                 comboBoxSampleRate.Font = FontManager.GetMainFont(9f, FontStyle.Regular);
             }
 
-            this.Resize += MainForm_Resize;
+            this.Resize += HandleResponsiveLayoutResize;
         }
 
         private void MainForm_Load(object sender, EventArgs e)
@@ -283,7 +283,7 @@ namespace WavConvert4Amiga
             LayoutMainFormControls();
         }
 
-        private void MainForm_Resize(object sender, EventArgs e)
+        private void HandleResponsiveLayoutResize(object sender, EventArgs e)
         {
             LayoutMainFormControls();
         }
@@ -382,41 +382,6 @@ namespace WavConvert4Amiga
             finally
             {
                 ResumeLayout(true);
-            }
-        }
-
-        private void MainForm_Resize(object sender, EventArgs e)
-        {
-            if (isApplyingResizeScale)
-            {
-                return;
-            }
-
-            if (previousClientSize.Width <= 0 || previousClientSize.Height <= 0)
-            {
-                previousClientSize = this.ClientSize;
-                return;
-            }
-
-            float widthScale = (float)this.ClientSize.Width / previousClientSize.Width;
-            float heightScale = (float)this.ClientSize.Height / previousClientSize.Height;
-
-            if (Math.Abs(widthScale - 1f) < 0.001f && Math.Abs(heightScale - 1f) < 0.001f)
-            {
-                return;
-            }
-
-            try
-            {
-                isApplyingResizeScale = true;
-                this.SuspendLayout();
-                this.Scale(new SizeF(widthScale, heightScale));
-            }
-            finally
-            {
-                this.ResumeLayout(true);
-                isApplyingResizeScale = false;
-                previousClientSize = this.ClientSize;
             }
         }
 
