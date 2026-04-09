@@ -74,6 +74,16 @@ namespace WavConvert4Amiga
         private bool isRecorded = false;
         private readonly List<QueueItem> conversionQueue = new List<QueueItem>();
         private readonly Dictionary<QueueItem, DataGridViewRow> queueRows = new Dictionary<QueueItem, DataGridViewRow>();
+        private ContextMenuStrip queueItemContextMenu;
+        private ToolStripMenuItem queueSampleRateMenuItem;
+        private ToolStripMenuItem queueToggleLowPassMenuItem;
+        private ToolStripMenuItem queueToggleAutoConvertMenuItem;
+        private ToolStripMenuItem queueToggleMoveOriginalMenuItem;
+        private ToolStripMenuItem queueToggleSaveAs8SvxMenuItem;
+        private ToolStripMenuItem queueToggleSaveAs16BitWavMenuItem;
+        private ToolStripMenuItem queueUseCurrentSettingsMenuItem;
+        private ToolStripMenuItem queueDeleteMenuItem;
+        private ToolStripMenuItem queueLoadPreviewMenuItem;
         private bool isQueueRunning = false;
         private bool queueStopRequested = false;
         private Size previousClientSize;
@@ -761,6 +771,143 @@ namespace WavConvert4Amiga
                 AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
                 FillWeight = 50
             });
+
+            dataGridViewQueue.CellMouseDown += DataGridViewQueue_CellMouseDown;
+            dataGridViewQueue.CellDoubleClick += DataGridViewQueue_CellDoubleClick;
+
+            InitializeQueueContextMenu();
+            dataGridViewQueue.ContextMenuStrip = queueItemContextMenu;
+        }
+
+        private void InitializeQueueContextMenu()
+        {
+            queueItemContextMenu = new ContextMenuStrip();
+            queueItemContextMenu.Opening += QueueItemContextMenu_Opening;
+
+            queueSampleRateMenuItem = new ToolStripMenuItem("Sample Rate");
+            var targetSampleRates = new (int sampleRate, string label)[]
+            {
+                (150, "150Hz - BitCrushed+++"),
+                (250, "250Hz - BitCrushed++"),
+                (500, "500Hz - BitCrushed+"),
+                (1000, "1000Hz - BitCrushed"),
+                (4143, "4143Hz - Half-Rate"),
+                (8287, "8287Hz - PAL Middle - C"),
+                (8363, "8363Hz - NTSC Middle - C"),
+                (22050, "22050Hz - HQ Already Tuned"),
+                (28836, "28836Hz - Maximum Quality - PAL"),
+                (29101, "29101Hz - Maximum Quality - NTSC")
+            };
+
+            foreach (var rateOption in targetSampleRates)
+            {
+                ToolStripMenuItem sampleRateItem = new ToolStripMenuItem(rateOption.label)
+                {
+                    Tag = rateOption.sampleRate
+                };
+                sampleRateItem.Click += QueueSampleRateItem_Click;
+                queueSampleRateMenuItem.DropDownItems.Add(sampleRateItem);
+            }
+
+            queueToggleLowPassMenuItem = new ToolStripMenuItem("Low-pass enabled");
+            queueToggleLowPassMenuItem.Click += QueueToggleLowPassMenuItem_Click;
+
+            queueToggleAutoConvertMenuItem = new ToolStripMenuItem("Auto convert");
+            queueToggleAutoConvertMenuItem.Click += QueueToggleAutoConvertMenuItem_Click;
+
+            queueToggleMoveOriginalMenuItem = new ToolStripMenuItem("Move original after convert");
+            queueToggleMoveOriginalMenuItem.Click += QueueToggleMoveOriginalMenuItem_Click;
+
+            queueToggleSaveAs8SvxMenuItem = new ToolStripMenuItem("Save as 8SVX");
+            queueToggleSaveAs8SvxMenuItem.Click += QueueToggleSaveAs8SvxMenuItem_Click;
+
+            queueToggleSaveAs16BitWavMenuItem = new ToolStripMenuItem("Save as 16-bit WAV");
+            queueToggleSaveAs16BitWavMenuItem.Click += QueueToggleSaveAs16BitWavMenuItem_Click;
+
+            queueUseCurrentSettingsMenuItem = new ToolStripMenuItem("Use current panel settings");
+            queueUseCurrentSettingsMenuItem.Click += QueueUseCurrentSettingsMenuItem_Click;
+
+            queueLoadPreviewMenuItem = new ToolStripMenuItem("Load in preview");
+            queueLoadPreviewMenuItem.Click += QueueLoadPreviewMenuItem_Click;
+
+            queueDeleteMenuItem = new ToolStripMenuItem("Delete from queue");
+            queueDeleteMenuItem.Click += QueueDeleteMenuItem_Click;
+
+            queueItemContextMenu.Items.Add(queueLoadPreviewMenuItem);
+            queueItemContextMenu.Items.Add(new ToolStripSeparator());
+            queueItemContextMenu.Items.Add(queueSampleRateMenuItem);
+            queueItemContextMenu.Items.Add(queueToggleLowPassMenuItem);
+            queueItemContextMenu.Items.Add(queueToggleAutoConvertMenuItem);
+            queueItemContextMenu.Items.Add(queueToggleMoveOriginalMenuItem);
+            queueItemContextMenu.Items.Add(queueToggleSaveAs8SvxMenuItem);
+            queueItemContextMenu.Items.Add(queueToggleSaveAs16BitWavMenuItem);
+            queueItemContextMenu.Items.Add(queueUseCurrentSettingsMenuItem);
+            queueItemContextMenu.Items.Add(new ToolStripSeparator());
+            queueItemContextMenu.Items.Add(queueDeleteMenuItem);
+        }
+
+        private void DataGridViewQueue_CellMouseDown(object sender, DataGridViewCellMouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Right || e.RowIndex < 0)
+            {
+                return;
+            }
+
+            dataGridViewQueue.ClearSelection();
+            dataGridViewQueue.Rows[e.RowIndex].Selected = true;
+            dataGridViewQueue.CurrentCell = dataGridViewQueue.Rows[e.RowIndex].Cells[Math.Max(e.ColumnIndex, 0)];
+        }
+
+        private void DataGridViewQueue_CellDoubleClick(object sender, DataGridViewCellEventArgs e)
+        {
+            if (e.RowIndex < 0)
+            {
+                return;
+            }
+
+            QueueItem selectedItem = GetSelectedQueueItem();
+            if (selectedItem == null)
+            {
+                return;
+            }
+
+            LoadQueueItemInPreview(selectedItem);
+        }
+
+        private void QueueItemContextMenu_Opening(object sender, CancelEventArgs e)
+        {
+            QueueItem selectedItem = GetSelectedQueueItem();
+            if (selectedItem == null)
+            {
+                e.Cancel = true;
+                return;
+            }
+
+            bool canModify = selectedItem.Status != QueueItemStatus.Processing && !isQueueRunning;
+
+            queueLoadPreviewMenuItem.Enabled = selectedItem.Status != QueueItemStatus.Processing;
+            queueSampleRateMenuItem.Enabled = canModify;
+            queueToggleLowPassMenuItem.Enabled = canModify;
+            queueToggleAutoConvertMenuItem.Enabled = canModify;
+            queueToggleMoveOriginalMenuItem.Enabled = canModify;
+            queueToggleSaveAs8SvxMenuItem.Enabled = canModify;
+            queueToggleSaveAs16BitWavMenuItem.Enabled = canModify;
+            queueUseCurrentSettingsMenuItem.Enabled = canModify;
+            queueDeleteMenuItem.Enabled = canModify;
+
+            queueToggleLowPassMenuItem.Checked = selectedItem.ApplyLowPass;
+            queueToggleAutoConvertMenuItem.Checked = selectedItem.AutoConvert;
+            queueToggleMoveOriginalMenuItem.Checked = selectedItem.MoveOriginal;
+            queueToggleSaveAs8SvxMenuItem.Checked = selectedItem.SaveAs8Svx;
+            queueToggleSaveAs16BitWavMenuItem.Checked = selectedItem.SaveAs16BitWav;
+
+            foreach (ToolStripItem subItem in queueSampleRateMenuItem.DropDownItems)
+            {
+                if (subItem is ToolStripMenuItem sampleRateMenu && sampleRateMenu.Tag is int sampleRate)
+                {
+                    sampleRateMenu.Checked = sampleRate == selectedItem.TargetSampleRate;
+                }
+            }
         }
 
         private void AddToListBox(string text)
@@ -2578,9 +2725,50 @@ namespace WavConvert4Amiga
             queueRows[item] = row;
         }
 
+        private QueueItem GetSelectedQueueItem()
+        {
+            if (dataGridViewQueue?.SelectedRows == null || dataGridViewQueue.SelectedRows.Count == 0)
+            {
+                return null;
+            }
+
+            return dataGridViewQueue.SelectedRows[0].Tag as QueueItem;
+        }
+
+        private void RefreshQueueItemRow(QueueItem item)
+        {
+            if (item == null || !queueRows.TryGetValue(item, out DataGridViewRow row))
+            {
+                return;
+            }
+
+            row.Cells["QueueSampleRate"].Value = $"{item.TargetSampleRate}Hz";
+            row.Cells["QueueStatus"].Value = item.Status.ToString();
+            row.Cells["QueueMessage"].Value = item.ErrorMessage ?? string.Empty;
+        }
+
+        private void RemoveQueueItem(QueueItem item)
+        {
+            if (item == null)
+            {
+                return;
+            }
+
+            conversionQueue.Remove(item);
+            if (queueRows.TryGetValue(item, out DataGridViewRow row))
+            {
+                dataGridViewQueue.Rows.Remove(row);
+                queueRows.Remove(item);
+            }
+        }
+
         private void UpdateQueueItemStatus(QueueItem item, QueueItemStatus status, string message = null)
         {
             item.Status = status;
+            if (status != QueueItemStatus.Failed)
+            {
+                item.ErrorMessage = null;
+            }
             if (status == QueueItemStatus.Failed)
             {
                 item.ErrorMessage = message;
@@ -2590,6 +2778,167 @@ namespace WavConvert4Amiga
             {
                 row.Cells["QueueStatus"].Value = status.ToString();
                 row.Cells["QueueMessage"].Value = message ?? string.Empty;
+            }
+        }
+
+        private void QueueSampleRateItem_Click(object sender, EventArgs e)
+        {
+            if (!(sender is ToolStripMenuItem menuItem) || !(menuItem.Tag is int sampleRate))
+            {
+                return;
+            }
+
+            SetSelectedQueueItemSampleRate(sampleRate);
+        }
+
+        private void SetSelectedQueueItemSampleRate(int sampleRate)
+        {
+            QueueItem selectedItem = GetSelectedQueueItem();
+            if (selectedItem == null)
+            {
+                return;
+            }
+
+            selectedItem.TargetSampleRate = sampleRate;
+            RefreshQueueItemRow(selectedItem);
+            AddToListBox($"Queue: {Path.GetFileName(selectedItem.FilePath)} sample rate -> {sampleRate}Hz");
+        }
+
+        private void QueueToggleLowPassMenuItem_Click(object sender, EventArgs e)
+        {
+            QueueItem selectedItem = GetSelectedQueueItem();
+            if (selectedItem == null)
+            {
+                return;
+            }
+
+            selectedItem.ApplyLowPass = !selectedItem.ApplyLowPass;
+            AddToListBox($"Queue: Low-pass {(selectedItem.ApplyLowPass ? "enabled" : "disabled")} for {Path.GetFileName(selectedItem.FilePath)}");
+        }
+
+        private void QueueToggleAutoConvertMenuItem_Click(object sender, EventArgs e)
+        {
+            QueueItem selectedItem = GetSelectedQueueItem();
+            if (selectedItem == null)
+            {
+                return;
+            }
+
+            selectedItem.AutoConvert = !selectedItem.AutoConvert;
+            AddToListBox($"Queue: Auto convert {(selectedItem.AutoConvert ? "enabled" : "disabled")} for {Path.GetFileName(selectedItem.FilePath)}");
+        }
+
+        private void QueueToggleMoveOriginalMenuItem_Click(object sender, EventArgs e)
+        {
+            QueueItem selectedItem = GetSelectedQueueItem();
+            if (selectedItem == null)
+            {
+                return;
+            }
+
+            selectedItem.MoveOriginal = !selectedItem.MoveOriginal;
+            AddToListBox($"Queue: Move original {(selectedItem.MoveOriginal ? "enabled" : "disabled")} for {Path.GetFileName(selectedItem.FilePath)}");
+        }
+
+        private void QueueToggleSaveAs8SvxMenuItem_Click(object sender, EventArgs e)
+        {
+            QueueItem selectedItem = GetSelectedQueueItem();
+            if (selectedItem == null)
+            {
+                return;
+            }
+
+            selectedItem.SaveAs8Svx = !selectedItem.SaveAs8Svx;
+            if (selectedItem.SaveAs8Svx)
+            {
+                selectedItem.SaveAs16BitWav = false;
+            }
+
+            AddToListBox($"Queue: Save as 8SVX {(selectedItem.SaveAs8Svx ? "enabled" : "disabled")} for {Path.GetFileName(selectedItem.FilePath)}");
+        }
+
+        private void QueueToggleSaveAs16BitWavMenuItem_Click(object sender, EventArgs e)
+        {
+            QueueItem selectedItem = GetSelectedQueueItem();
+            if (selectedItem == null)
+            {
+                return;
+            }
+
+            selectedItem.SaveAs16BitWav = !selectedItem.SaveAs16BitWav;
+            if (selectedItem.SaveAs16BitWav)
+            {
+                selectedItem.SaveAs8Svx = false;
+            }
+
+            AddToListBox($"Queue: Save as 16-bit WAV {(selectedItem.SaveAs16BitWav ? "enabled" : "disabled")} for {Path.GetFileName(selectedItem.FilePath)}");
+        }
+
+        private void QueueUseCurrentSettingsMenuItem_Click(object sender, EventArgs e)
+        {
+            QueueItem selectedItem = GetSelectedQueueItem();
+            if (selectedItem == null)
+            {
+                return;
+            }
+
+            QueueItem currentSettings = CreateQueueItemFromCurrentSettings(selectedItem.FilePath);
+            selectedItem.TargetSampleRate = currentSettings.TargetSampleRate;
+            selectedItem.ApplyAmplify = currentSettings.ApplyAmplify;
+            selectedItem.AmplificationFactor = currentSettings.AmplificationFactor;
+            selectedItem.ApplyLowPass = currentSettings.ApplyLowPass;
+            selectedItem.ApplyEffects = currentSettings.ApplyEffects;
+            selectedItem.EffectsSnapshot = currentSettings.EffectsSnapshot;
+            selectedItem.AutoConvert = currentSettings.AutoConvert;
+            selectedItem.MoveOriginal = currentSettings.MoveOriginal;
+            selectedItem.SaveAs8Svx = currentSettings.SaveAs8Svx;
+            selectedItem.SaveAs16BitWav = currentSettings.SaveAs16BitWav;
+
+            RefreshQueueItemRow(selectedItem);
+            AddToListBox($"Queue: Copied current settings to {Path.GetFileName(selectedItem.FilePath)}");
+        }
+
+        private void QueueDeleteMenuItem_Click(object sender, EventArgs e)
+        {
+            QueueItem selectedItem = GetSelectedQueueItem();
+            if (selectedItem == null)
+            {
+                return;
+            }
+
+            RemoveQueueItem(selectedItem);
+            AddToListBox($"Queue: Removed {Path.GetFileName(selectedItem.FilePath)}");
+        }
+
+        private void QueueLoadPreviewMenuItem_Click(object sender, EventArgs e)
+        {
+            QueueItem selectedItem = GetSelectedQueueItem();
+            if (selectedItem == null)
+            {
+                return;
+            }
+
+            LoadQueueItemInPreview(selectedItem);
+        }
+
+        private void LoadQueueItemInPreview(QueueItem item)
+        {
+            if (item == null || !File.Exists(item.FilePath))
+            {
+                MessageBox.Show("Queue item file can no longer be found.", "File not found", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            try
+            {
+                StopPreview();
+                ProcessWaveFile(item.FilePath, allowAutoConvert: false, throwOnError: true);
+                ApplyQueueItemSettings(item);
+                AddToListBox($"Queue: Loaded in preview {Path.GetFileName(item.FilePath)}");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Unable to load queue item preview: {ex.Message}", "Queue preview error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
