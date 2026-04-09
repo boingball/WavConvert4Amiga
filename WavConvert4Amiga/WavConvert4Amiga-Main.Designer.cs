@@ -48,7 +48,6 @@
             this.btnQueueClearCompleted = new System.Windows.Forms.Button();
             this.checkBox16BitWAV = new System.Windows.Forms.CheckBox();
             this.panel1.SuspendLayout();
-            this.panelBottom.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.dataGridViewQueue)).BeginInit();
             this.SuspendLayout();
             // 
@@ -101,7 +100,7 @@
             this.listBoxFiles.Location = new System.Drawing.Point(22, 526);
             this.listBoxFiles.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.listBoxFiles.Name = "listBoxFiles";
-            this.listBoxFiles.Size = new System.Drawing.Size(1069, 64);
+            this.listBoxFiles.Size = new System.Drawing.Size(1069, 52);
             this.listBoxFiles.TabIndex = 4;
             // 
             // comboBoxSampleRate
@@ -140,7 +139,7 @@
             // panelWaveform
             // 
             this.panelWaveform.Location = new System.Drawing.Point(22, 76);
-            this.panelWaveform.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.panelWaveform.Margin = new System.Windows.Forms.Padding(4);
             this.panelWaveform.Name = "panelWaveform";
             this.panelWaveform.Size = new System.Drawing.Size(1469, 443);
             this.panelWaveform.TabIndex = 8;
@@ -183,7 +182,6 @@
             // 
             // panelBottom
             // 
-            this.panelBottom.Controls.Add(this.dataGridViewQueue);
             this.panelBottom.Location = new System.Drawing.Point(26, 788);
             this.panelBottom.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.panelBottom.Name = "panelBottom";
@@ -194,9 +192,9 @@
             // 
             this.dataGridViewQueue.AllowUserToAddRows = false;
             this.dataGridViewQueue.AllowUserToDeleteRows = false;
-            this.dataGridViewQueue.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            this.dataGridViewQueue.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
+            this.dataGridViewQueue.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
+            this.dataGridViewQueue.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             this.dataGridViewQueue.Location = new System.Drawing.Point(25, 728);
             this.dataGridViewQueue.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.dataGridViewQueue.Name = "dataGridViewQueue";
@@ -209,7 +207,7 @@
             // 
             // btnQueueAddFiles
             // 
-            this.btnQueueAddFiles.Location = new System.Drawing.Point(246, 52);
+            this.btnQueueAddFiles.Location = new System.Drawing.Point(222, 38);
             this.btnQueueAddFiles.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.btnQueueAddFiles.Name = "btnQueueAddFiles";
             this.btnQueueAddFiles.Size = new System.Drawing.Size(145, 34);
@@ -220,7 +218,7 @@
             // 
             // btnQueueStart
             // 
-            this.btnQueueStart.Location = new System.Drawing.Point(397, 52);
+            this.btnQueueStart.Location = new System.Drawing.Point(373, 38);
             this.btnQueueStart.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.btnQueueStart.Name = "btnQueueStart";
             this.btnQueueStart.Size = new System.Drawing.Size(145, 34);
@@ -231,7 +229,7 @@
             // 
             // btnQueueStop
             // 
-            this.btnQueueStop.Location = new System.Drawing.Point(548, 52);
+            this.btnQueueStop.Location = new System.Drawing.Point(524, 38);
             this.btnQueueStop.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.btnQueueStop.Name = "btnQueueStop";
             this.btnQueueStop.Size = new System.Drawing.Size(145, 34);
@@ -242,7 +240,7 @@
             // 
             // btnQueueClearCompleted
             // 
-            this.btnQueueClearCompleted.Location = new System.Drawing.Point(699, 52);
+            this.btnQueueClearCompleted.Location = new System.Drawing.Point(675, 38);
             this.btnQueueClearCompleted.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.btnQueueClearCompleted.Name = "btnQueueClearCompleted";
             this.btnQueueClearCompleted.Size = new System.Drawing.Size(170, 34);
@@ -270,7 +268,6 @@
             this.BackColor = System.Drawing.SystemColors.Control;
             this.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Stretch;
             this.ClientSize = new System.Drawing.Size(1507, 844);
-            this.Controls.Add(this.btnQueueStart);
             this.Controls.Add(this.panelBottom);
             this.Controls.Add(this.dataGridViewQueue);
             this.Controls.Add(this.btnQueueClearCompleted);
@@ -289,16 +286,13 @@
             this.Controls.Add(this.checkBoxEnable8SVX);
             this.Controls.Add(this.checkBox16BitWAV);
             this.DoubleBuffered = true;
-            this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.Sizable;
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
-            this.MaximizeBox = true;
             this.Name = "MainForm";
             this.Text = "SoundConvert4Amiga";
             this.Load += new System.EventHandler(this.MainForm_Load);
             this.panel1.ResumeLayout(false);
             this.panel1.PerformLayout();
-            this.panelBottom.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)(this.dataGridViewQueue)).EndInit();
             this.ResumeLayout(false);
             this.PerformLayout();
