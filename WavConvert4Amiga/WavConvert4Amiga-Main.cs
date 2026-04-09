@@ -2182,7 +2182,7 @@ namespace WavConvert4Amiga
             effectsPanel = new Panel
             {
                 Location = new Point(panelBottom.Width - 300, 10),
-                Size = new Size(280, 320),
+                Size = new Size(280, 225),
                 BackColor = Color.FromArgb(180, 190, 210)
             };
             AddBevelToPanel(effectsPanel);
@@ -2197,47 +2197,51 @@ namespace WavConvert4Amiga
             };
             effectsPanel.Controls.Add(labelEffects);
 
-            // Create effect buttons
-            var buttonY = 30;
-            CreateEffectButton("Underwater Effect", new Point(10, buttonY), effectsPanel, ApplyUnderwaterEffect);
-            CreateEffectButton("Robot Voice", new Point(150, buttonY), effectsPanel, ApplyRobotEffect);
+            // Create effect buttons in a 3-column grid to avoid clipping.
+            int leftMargin = 10;
+            int topMargin = 30;
+            int columnWidth = 84;
+            int rowHeight = 30;
+            int columnSpacing = 4;
 
-            buttonY += 30;
-            CreateEffectButton("High Pitch", new Point(10, buttonY), effectsPanel, ApplyHighPitchEffect);
-            CreateEffectButton("Low Pitch", new Point(150, buttonY), effectsPanel, ApplyLowPitchEffect);
+            var buttons = new (string Text, EventHandler Handler)[]
+            {
+                ("Underwater", ApplyUnderwaterEffect),
+                ("Robot Voice", ApplyRobotEffect),
+                ("High Pitch", ApplyHighPitchEffect),
+                ("Low Pitch", ApplyLowPitchEffect),
+                ("Echo", ApplyEchoEffect),
+                ("Vocal Remove", ApplyVocalRemovalEffect),
+                ("Chorus", ApplyChorusEffect),
+                ("Overdrive", ApplyOverdriveEffect),
+                ("Reverse", ApplyReverseEffect),
+                ("Noise Gate", ApplyNoiseGateEffect),
+                ("Fade In", ApplyFadeInEffect),
+                ("Fade Out", ApplyFadeOutEffect),
+                ("Telephone BP", ApplyTelephoneBandPassEffect),
+                ("AM Radio BP", ApplyAmRadioBandPassEffect),
+                ("Reset", ResetEffects)
+            };
 
-            buttonY += 30;
-            CreateEffectButton("Echo Effect", new Point(10, buttonY), effectsPanel, ApplyEchoEffect);
-            CreateEffectButton("Vocal Remove", new Point(150, buttonY), effectsPanel, ApplyVocalRemovalEffect);
+            for (int i = 0; i < buttons.Length; i++)
+            {
+                int row = i / 3;
+                int column = i % 3;
+                int x = leftMargin + (column * (columnWidth + columnSpacing));
+                int y = topMargin + (row * rowHeight);
+                CreateEffectButton(buttons[i].Text, new Point(x, y), effectsPanel, buttons[i].Handler, new Size(columnWidth, 28));
+            }
 
-            buttonY += 30;
-            CreateEffectButton("Chorus", new Point(10, buttonY), effectsPanel, ApplyChorusEffect);
-            CreateEffectButton("Overdrive", new Point(150, buttonY), effectsPanel, ApplyOverdriveEffect);
-
-            buttonY += 30;
-            CreateEffectButton("Reverse", new Point(10, buttonY), effectsPanel, ApplyReverseEffect);
-            CreateEffectButton("Noise Gate", new Point(150, buttonY), effectsPanel, ApplyNoiseGateEffect);
-
-            buttonY += 30;
-            CreateEffectButton("Fade In", new Point(10, buttonY), effectsPanel, ApplyFadeInEffect);
-            CreateEffectButton("Fade Out", new Point(150, buttonY), effectsPanel, ApplyFadeOutEffect);
-
-            buttonY += 30;
-            CreateEffectButton("Telephone BP", new Point(10, buttonY), effectsPanel, ApplyTelephoneBandPassEffect);
-            CreateEffectButton("AM Radio BP", new Point(150, buttonY), effectsPanel, ApplyAmRadioBandPassEffect);
-
-            buttonY += 30;
-            CreateEffectButton("Reset Effects", new Point(10, buttonY), effectsPanel, ResetEffects);
             panelBottom.Controls.Add(effectsPanel);
         }
 
-        private void CreateEffectButton(string text, Point location, Panel parent, EventHandler clickHandler)
+        private void CreateEffectButton(string text, Point location, Panel parent, EventHandler clickHandler, Size? sizeOverride = null)
         {
             RetroButton button = new RetroButton
             {
                 Text = text,
                 Location = location,
-                Size = new Size(120, 30)
+                Size = sizeOverride ?? new Size(120, 30)
             };
             button.Click += clickHandler;
             parent.Controls.Add(button);
@@ -2477,12 +2481,12 @@ namespace WavConvert4Amiga
 
         private void ApplyFadeInEffect(object sender, EventArgs e)
         {
-            ApplyTrackedEffect("fadein", () => ApplySelectionEffect(selection => audioEffects.ApplyFadeIn(selection), "Fade In"));
+            ApplyTrackedEffect("fadein", () => ApplyFadeInSelectionOrMarker());
         }
 
         private void ApplyFadeOutEffect(object sender, EventArgs e)
         {
-            ApplyTrackedEffect("fadeout", () => ApplySelectionEffect(selection => audioEffects.ApplyFadeOut(selection), "Fade Out"));
+            ApplyTrackedEffect("fadeout", () => ApplyFadeOutSelectionOrMarker());
         }
 
         private void ApplyTelephoneBandPassEffect(object sender, EventArgs e)
@@ -2526,6 +2530,68 @@ namespace WavConvert4Amiga
 
             AddToListBox($"{effectLabel} applied to full sample (no loop selection set).");
             return effectFunction(currentPcmData);
+        }
+
+        private byte[] ApplyFadeInSelectionOrMarker()
+        {
+            var (loopStart, loopEnd) = waveformViewer.GetLoopPoints();
+            return ApplyFadeWithRange(loopStart, loopEnd, true);
+        }
+
+        private byte[] ApplyFadeOutSelectionOrMarker()
+        {
+            var (loopStart, loopEnd) = waveformViewer.GetLoopPoints();
+            return ApplyFadeWithRange(loopStart, loopEnd, false);
+        }
+
+        private byte[] ApplyFadeWithRange(int loopStart, int loopEnd, bool fadeIn)
+        {
+            int dataLength = currentPcmData.Length;
+            int rangeStart;
+            int rangeEndExclusive;
+            string fadeName = fadeIn ? "Fade In" : "Fade Out";
+
+            if (loopStart >= 0 && loopEnd > loopStart && loopEnd <= dataLength)
+            {
+                // Two-point selection: fade only inside the selected range.
+                rangeStart = loopStart;
+                rangeEndExclusive = loopEnd;
+                AddToListBox($"{fadeName} applied to loop selection {loopStart}-{loopEnd}.");
+            }
+            else if (loopStart >= 0 && loopEnd == -1 && loopStart < dataLength)
+            {
+                // Single marker: fade in up to marker, or fade out from marker.
+                if (fadeIn)
+                {
+                    rangeStart = 0;
+                    rangeEndExclusive = Math.Max(1, loopStart + 1);
+                    AddToListBox($"{fadeName} applied from start to marker {loopStart}.");
+                }
+                else
+                {
+                    rangeStart = loopStart;
+                    rangeEndExclusive = dataLength;
+                    AddToListBox($"{fadeName} applied from marker {loopStart} to end.");
+                }
+            }
+            else
+            {
+                // No points set: fade entire sample.
+                rangeStart = 0;
+                rangeEndExclusive = dataLength;
+                AddToListBox($"{fadeName} applied to full sample (no loop selection set).");
+            }
+
+            int rangeLength = Math.Max(1, rangeEndExclusive - rangeStart);
+            byte[] rangeData = new byte[rangeLength];
+            Array.Copy(currentPcmData, rangeStart, rangeData, 0, rangeLength);
+
+            byte[] processed = fadeIn ? audioEffects.ApplyFadeIn(rangeData) : audioEffects.ApplyFadeOut(rangeData);
+
+            byte[] output = new byte[dataLength];
+            Array.Copy(currentPcmData, output, dataLength);
+            Array.Copy(processed, 0, output, rangeStart, Math.Min(processed.Length, rangeLength));
+            return output;
         }
 
         private void ResetEffects(object sender, EventArgs e)
