@@ -380,7 +380,7 @@ namespace WavConvert4Amiga
         {
             using (OpenFileDialog openFileDialog = new OpenFileDialog())
             {
-                openFileDialog.Filter = "All Supported Files|*.wav;*.8svx;*.iff|WAV files (*.wav)|*.wav|IFF/8SVX files (*.8svx;*.iff)|*.8svx;*.iff|ST Sample Files|*.*|All files (*.*)|*.*";
+                openFileDialog.Filter = "All Supported Files|*.wav;*.mp3;*.8svx;*.iff|WAV/MP3 files (*.wav;*.mp3)|*.wav;*.mp3|IFF/8SVX files (*.8svx;*.iff)|*.8svx;*.iff|ST Sample Files|*.*|All files (*.*)|*.*";
                 openFileDialog.FilterIndex = 1;
                 openFileDialog.Multiselect = true;
                 openFileDialog.Title = "Select Audio Files";
@@ -2613,6 +2613,25 @@ namespace WavConvert4Amiga
                         originalSampleRate = reader.WaveFormat.SampleRate;
                         originalPcmData = new byte[reader.Length];
                         reader.Read(originalPcmData, 0, originalPcmData.Length);
+                    }
+                }
+                else if (extension == ".mp3")
+                {
+                    // Decode MP3 files to PCM so they can use the same editing/conversion pipeline
+                    using (var reader = new MediaFoundationReader(filePath))
+                    using (var pcmBuffer = new MemoryStream())
+                    {
+                        originalFormat = reader.WaveFormat;
+                        originalSampleRate = reader.WaveFormat.SampleRate;
+
+                        byte[] buffer = new byte[16384];
+                        int bytesRead;
+                        while ((bytesRead = reader.Read(buffer, 0, buffer.Length)) > 0)
+                        {
+                            pcmBuffer.Write(buffer, 0, bytesRead);
+                        }
+
+                        originalPcmData = pcmBuffer.ToArray();
                     }
                 }
                 else
