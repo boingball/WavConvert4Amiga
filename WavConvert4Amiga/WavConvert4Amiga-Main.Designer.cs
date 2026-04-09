@@ -41,8 +41,15 @@
             this.checkBoxAutoConvert = new System.Windows.Forms.CheckBox();
             this.btnManualConvert = new System.Windows.Forms.Button();
             this.panelBottom = new System.Windows.Forms.Panel();
+            this.dataGridViewQueue = new System.Windows.Forms.DataGridView();
+            this.btnQueueAddFiles = new System.Windows.Forms.Button();
+            this.btnQueueStart = new System.Windows.Forms.Button();
+            this.btnQueueStop = new System.Windows.Forms.Button();
+            this.btnQueueClearCompleted = new System.Windows.Forms.Button();
             this.checkBox16BitWAV = new System.Windows.Forms.CheckBox();
             this.panel1.SuspendLayout();
+            this.panelBottom.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.dataGridViewQueue)).BeginInit();
             this.SuspendLayout();
             // 
             // label1
@@ -176,11 +183,72 @@
             // 
             // panelBottom
             // 
+            this.panelBottom.Controls.Add(this.dataGridViewQueue);
             this.panelBottom.Location = new System.Drawing.Point(26, 788);
             this.panelBottom.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.panelBottom.Name = "panelBottom";
             this.panelBottom.Size = new System.Drawing.Size(1069, 275);
             this.panelBottom.TabIndex = 12;
+            // 
+            // dataGridViewQueue
+            // 
+            this.dataGridViewQueue.AllowUserToAddRows = false;
+            this.dataGridViewQueue.AllowUserToDeleteRows = false;
+            this.dataGridViewQueue.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            this.dataGridViewQueue.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.dataGridViewQueue.Location = new System.Drawing.Point(0, 0);
+            this.dataGridViewQueue.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
+            this.dataGridViewQueue.Name = "dataGridViewQueue";
+            this.dataGridViewQueue.ReadOnly = true;
+            this.dataGridViewQueue.RowHeadersVisible = false;
+            this.dataGridViewQueue.RowHeadersWidth = 62;
+            this.dataGridViewQueue.RowTemplate.Height = 28;
+            this.dataGridViewQueue.Size = new System.Drawing.Size(1069, 275);
+            this.dataGridViewQueue.TabIndex = 0;
+            // 
+            // btnQueueAddFiles
+            // 
+            this.btnQueueAddFiles.Location = new System.Drawing.Point(246, 52);
+            this.btnQueueAddFiles.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
+            this.btnQueueAddFiles.Name = "btnQueueAddFiles";
+            this.btnQueueAddFiles.Size = new System.Drawing.Size(145, 34);
+            this.btnQueueAddFiles.TabIndex = 12;
+            this.btnQueueAddFiles.Text = "Add Files...";
+            this.btnQueueAddFiles.UseVisualStyleBackColor = true;
+            this.btnQueueAddFiles.Click += new System.EventHandler(this.btnQueueAddFiles_Click);
+            // 
+            // btnQueueStart
+            // 
+            this.btnQueueStart.Location = new System.Drawing.Point(397, 52);
+            this.btnQueueStart.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
+            this.btnQueueStart.Name = "btnQueueStart";
+            this.btnQueueStart.Size = new System.Drawing.Size(145, 34);
+            this.btnQueueStart.TabIndex = 13;
+            this.btnQueueStart.Text = "Start Queue";
+            this.btnQueueStart.UseVisualStyleBackColor = true;
+            this.btnQueueStart.Click += new System.EventHandler(this.btnQueueStart_Click);
+            // 
+            // btnQueueStop
+            // 
+            this.btnQueueStop.Location = new System.Drawing.Point(548, 52);
+            this.btnQueueStop.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
+            this.btnQueueStop.Name = "btnQueueStop";
+            this.btnQueueStop.Size = new System.Drawing.Size(145, 34);
+            this.btnQueueStop.TabIndex = 14;
+            this.btnQueueStop.Text = "Pause/Stop";
+            this.btnQueueStop.UseVisualStyleBackColor = true;
+            this.btnQueueStop.Click += new System.EventHandler(this.btnQueueStop_Click);
+            // 
+            // btnQueueClearCompleted
+            // 
+            this.btnQueueClearCompleted.Location = new System.Drawing.Point(699, 52);
+            this.btnQueueClearCompleted.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
+            this.btnQueueClearCompleted.Name = "btnQueueClearCompleted";
+            this.btnQueueClearCompleted.Size = new System.Drawing.Size(170, 34);
+            this.btnQueueClearCompleted.TabIndex = 15;
+            this.btnQueueClearCompleted.Text = "Clear Completed";
+            this.btnQueueClearCompleted.UseVisualStyleBackColor = true;
+            this.btnQueueClearCompleted.Click += new System.EventHandler(this.btnQueueClearCompleted_Click);
             // 
             // checkBox16BitWAV
             // 
@@ -201,6 +269,10 @@
             this.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Stretch;
             this.ClientSize = new System.Drawing.Size(1695, 1055);
             this.Controls.Add(this.panelBottom);
+            this.Controls.Add(this.btnQueueClearCompleted);
+            this.Controls.Add(this.btnQueueStop);
+            this.Controls.Add(this.btnQueueStart);
+            this.Controls.Add(this.btnQueueAddFiles);
             this.Controls.Add(this.btnManualConvert);
             this.Controls.Add(this.panelWaveform);
             this.Controls.Add(this.listBoxFiles);
@@ -222,6 +294,8 @@
             this.Load += new System.EventHandler(this.MainForm_Load);
             this.panel1.ResumeLayout(false);
             this.panel1.PerformLayout();
+            this.panelBottom.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)(this.dataGridViewQueue)).EndInit();
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -240,6 +314,10 @@
         private System.Windows.Forms.CheckBox checkBoxAutoConvert;
         private System.Windows.Forms.Button btnManualConvert;
         private System.Windows.Forms.Panel panelBottom;
+        private System.Windows.Forms.DataGridView dataGridViewQueue;
+        private System.Windows.Forms.Button btnQueueAddFiles;
+        private System.Windows.Forms.Button btnQueueStart;
+        private System.Windows.Forms.Button btnQueueStop;
+        private System.Windows.Forms.Button btnQueueClearCompleted;
     }
 }
-
