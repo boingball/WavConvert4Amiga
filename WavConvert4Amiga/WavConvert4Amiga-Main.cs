@@ -90,6 +90,7 @@ namespace WavConvert4Amiga
         private Label labelPTNote;
         private Panel recordingPanel;
         private Panel effectsPanel;
+        private bool suppressSampleRateChangeEvents = false;
 
 
         private Dictionary<string, (int pal, int ntsc)> ptNoteToHz = new Dictionary<string, (int pal, int ntsc)>()
@@ -238,7 +239,6 @@ namespace WavConvert4Amiga
             panel1.BackColor = Color.FromArgb(180, 190, 210);  // Lighter blue-grey for panels
             panelWaveform.BackColor = Color.Black;  // Waveform area should be black
             ApplyAmigaStyle(this.Controls);
-            comboBoxSampleRate.Leave += ComboBoxSampleRate_Leave;
             waveformViewer.LoopPointsChanged += OnLoopPointsChanged;
             checkBoxLowPass.CheckedChanged += checkBoxLowPass_CheckedChanged;
 
@@ -572,6 +572,7 @@ namespace WavConvert4Amiga
 
         private void ComboBoxSampleRate_Leave(object sender, EventArgs e)
         {
+            if (suppressSampleRateChangeEvents) return;
             ProcessSampleRateChange();
         }
 
@@ -1131,7 +1132,7 @@ namespace WavConvert4Amiga
             amplificationFactor = previousState.AmplificationFactor;
 
             // CRITICAL FIX: Update sample rate in UI to match the restored state
-            comboBoxSampleRate.Text = $"{previousState.SampleRate}Hz";
+            SetSampleRateComboTextWithoutProcessing(previousState.SampleRate);
 
             // Update amplification UI
             trackBarAmplify.Value = (int)(amplificationFactor * 100);
@@ -1666,7 +1667,7 @@ namespace WavConvert4Amiga
             amplificationFactor = redoState.AmplificationFactor;
 
             // CRITICAL FIX: Update sample rate in UI to match the restored state
-            comboBoxSampleRate.Text = $"{redoState.SampleRate}Hz";
+            SetSampleRateComboTextWithoutProcessing(redoState.SampleRate);
 
             // Update amplification UI
             trackBarAmplify.Value = (int)(amplificationFactor * 100);
@@ -3230,6 +3231,7 @@ namespace WavConvert4Amiga
 
         private void comboBoxSampleRate_SelectedIndexChanged(object sender, EventArgs e)
         {
+            if (suppressSampleRateChangeEvents) return;
             string selectedRate = comboBoxSampleRate.Text;
             string sampleRateString = new string(selectedRate.TakeWhile(char.IsDigit).ToArray());
 
@@ -3241,6 +3243,19 @@ namespace WavConvert4Amiga
             // Stop any current playback and processing
             StopPreview();
             ProcessSampleRateChange();
+        }
+
+        private void SetSampleRateComboTextWithoutProcessing(int sampleRate)
+        {
+            suppressSampleRateChangeEvents = true;
+            try
+            {
+                comboBoxSampleRate.Text = $"{sampleRate}Hz";
+            }
+            finally
+            {
+                suppressSampleRateChangeEvents = false;
+            }
         }
 
         private byte[] LoadWaveFile(string filePath)
