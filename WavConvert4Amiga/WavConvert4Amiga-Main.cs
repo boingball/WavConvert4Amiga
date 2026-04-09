@@ -8,6 +8,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Xml.Linq;
 using NAudio.Utils;
@@ -78,6 +79,10 @@ namespace WavConvert4Amiga
         private Stack<AudioState> redoStack = new Stack<AudioState>();
         private const int MAX_UNDO_STEPS = 20; // Limit memory usage
         private bool isRecorded = false;
+        private readonly List<QueueItem> conversionQueue = new List<QueueItem>();
+        private readonly Dictionary<QueueItem, DataGridViewRow> queueRows = new Dictionary<QueueItem, DataGridViewRow>();
+        private bool isQueueRunning = false;
+        private bool queueStopRequested = false;
 
 
         private Dictionary<string, (int pal, int ntsc)> ptNoteToHz = new Dictionary<string, (int pal, int ntsc)>()
@@ -211,6 +216,8 @@ namespace WavConvert4Amiga
             listBoxFiles.ForeColor = Color.FromArgb(255, 215, 0); // Gold text
             listBoxFiles.BorderStyle = BorderStyle.Fixed3D;
             InitializeListBox();
+            InitializeQueueGrid();
+            ToggleQueueButtons(false);
             InitializeComboBox();
             InitializeCursors();
             //InitializeAmplificationControls();
@@ -568,6 +575,59 @@ namespace WavConvert4Amiga
             // Override the default add method to always scroll to last item
             listBoxFiles.DrawMode = DrawMode.OwnerDrawFixed;
             listBoxFiles.DrawItem += ListBoxFiles_DrawItem;
+        }
+
+        private void InitializeQueueGrid()
+        {
+            if (dataGridViewQueue == null)
+            {
+                return;
+            }
+
+            dataGridViewQueue.AutoGenerateColumns = false;
+            dataGridViewQueue.AllowUserToAddRows = false;
+            dataGridViewQueue.AllowUserToDeleteRows = false;
+            dataGridViewQueue.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+            dataGridViewQueue.MultiSelect = false;
+            dataGridViewQueue.RowHeadersVisible = false;
+            dataGridViewQueue.BackgroundColor = Color.Black;
+            dataGridViewQueue.GridColor = Color.FromArgb(80, 90, 120);
+            dataGridViewQueue.DefaultCellStyle.BackColor = Color.Black;
+            dataGridViewQueue.DefaultCellStyle.ForeColor = Color.FromArgb(255, 215, 0);
+            dataGridViewQueue.DefaultCellStyle.SelectionBackColor = Color.FromArgb(60, 70, 100);
+            dataGridViewQueue.DefaultCellStyle.SelectionForeColor = Color.FromArgb(255, 215, 0);
+            dataGridViewQueue.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(80, 90, 120);
+            dataGridViewQueue.ColumnHeadersDefaultCellStyle.ForeColor = Color.FromArgb(255, 215, 0);
+            dataGridViewQueue.EnableHeadersVisualStyles = false;
+            dataGridViewQueue.Font = FontManager.GetMainFont(9f);
+
+            dataGridViewQueue.Columns.Clear();
+            dataGridViewQueue.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "QueueFile",
+                HeaderText = "File",
+                AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
+                FillWeight = 50
+            });
+            dataGridViewQueue.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "QueueSampleRate",
+                HeaderText = "Sample Rate",
+                Width = 120
+            });
+            dataGridViewQueue.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "QueueStatus",
+                HeaderText = "Status",
+                Width = 140
+            });
+            dataGridViewQueue.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "QueueMessage",
+                HeaderText = "Message",
+                AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
+                FillWeight = 50
+            });
         }
 
         private void AddToListBox(string text)
@@ -2313,13 +2373,7 @@ namespace WavConvert4Amiga
             try
             {
                 string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
-
-                foreach (string file in files)
-                {
-                    StopPreview();
-                    trackBarAmplify.Value = 100;
-                    ProcessWaveFile(file);
-                }
+                EnqueueFiles(files);
             }
             catch (Exception ex)
             {
@@ -2332,7 +2386,175 @@ namespace WavConvert4Amiga
             }
         }
 
-        private void ProcessWaveFile(string filePath)
+        private void EnqueueFiles(IEnumerable<string> files)
+        {
+            if (files == null)
+            {
+                return;
+            }
+
+            foreach (string file in files)
+            {
+                if (string.IsNullOrWhiteSpace(file) || !File.Exists(file))
+                {
+                    continue;
+                }
+
+                QueueItem item = CreateQueueItemFromCurrentSettings(file);
+                conversionQueue.Add(item);
+                AddQueueItemRow(item);
+                AddToListBox($"Queued: {Path.GetFileName(file)} ({item.TargetSampleRate}Hz)");
+            }
+        }
+
+        private QueueItem CreateQueueItemFromCurrentSettings(string filePath)
+        {
+            return new QueueItem
+            {
+                FilePath = filePath,
+                TargetSampleRate = GetSelectedSampleRate(),
+                ApplyAmplify = amplificationFactor != 1.0f,
+                AmplificationFactor = amplificationFactor,
+                ApplyLowPass = checkBoxLowPass.Checked,
+                ApplyEffects = currentEffects.Count > 0,
+                EffectsSnapshot = currentEffects.ToList(),
+                Status = QueueItemStatus.Queued,
+                OutputPath = null,
+                ProfileName = "Current",
+                AutoConvert = checkBoxAutoConvert.Checked,
+                MoveOriginal = checkBoxMoveOriginal.Checked,
+                SaveAs8Svx = checkBoxEnable8SVX.Checked,
+                SaveAs16BitWav = checkBox16BitWAV.Checked
+            };
+        }
+
+        private void AddQueueItemRow(QueueItem item)
+        {
+            if (dataGridViewQueue == null)
+            {
+                return;
+            }
+
+            int rowIndex = dataGridViewQueue.Rows.Add(
+                Path.GetFileName(item.FilePath),
+                $"{item.TargetSampleRate}Hz",
+                item.Status.ToString(),
+                "Queued");
+            DataGridViewRow row = dataGridViewQueue.Rows[rowIndex];
+            row.Tag = item;
+            queueRows[item] = row;
+        }
+
+        private void UpdateQueueItemStatus(QueueItem item, QueueItemStatus status, string message = null)
+        {
+            item.Status = status;
+            if (status == QueueItemStatus.Failed)
+            {
+                item.ErrorMessage = message;
+            }
+
+            if (queueRows.TryGetValue(item, out DataGridViewRow row))
+            {
+                row.Cells["QueueStatus"].Value = status.ToString();
+                row.Cells["QueueMessage"].Value = message ?? string.Empty;
+            }
+        }
+
+        private void ApplyQueueItemSettings(QueueItem item)
+        {
+            comboBoxSampleRate.Text = $"{item.TargetSampleRate}Hz";
+            checkBoxLowPass.Checked = item.ApplyLowPass;
+            amplificationFactor = item.AmplificationFactor;
+            trackBarAmplify.Value = (int)Math.Round(item.AmplificationFactor * 100);
+            labelAmplify.Text = $"Amplify: {trackBarAmplify.Value}%";
+            checkBoxEnable8SVX.Checked = item.SaveAs8Svx;
+            checkBox16BitWAV.Checked = item.SaveAs16BitWav;
+            checkBoxMoveOriginal.Checked = item.MoveOriginal;
+            checkBoxAutoConvert.Checked = item.AutoConvert;
+        }
+
+        private async Task ProcessQueueAsync()
+        {
+            if (isQueueRunning)
+            {
+                return;
+            }
+
+            isQueueRunning = true;
+            queueStopRequested = false;
+            ToggleQueueButtons(true);
+
+            try
+            {
+                foreach (QueueItem item in conversionQueue.Where(queueItem => queueItem.Status == QueueItemStatus.Queued).ToList())
+                {
+                    if (queueStopRequested)
+                    {
+                        break;
+                    }
+
+                    UpdateQueueItemStatus(item, QueueItemStatus.Processing, "Loading");
+                    AddToListBox($"Queue: Loading {Path.GetFileName(item.FilePath)}");
+
+                    try
+                    {
+                        comboBoxSampleRate.Text = $"{item.TargetSampleRate}Hz";
+                        ProcessWaveFile(item.FilePath, allowAutoConvert: false, throwOnError: true);
+                        ApplyQueueItemSettings(item);
+
+                        UpdateQueueItemStatus(item, QueueItemStatus.Processing, "Converting");
+                        ProcessWithCurrentSampleRate(
+                            null,
+                            forceSave: true,
+                            outputPathOverride: item.OutputPath,
+                            progressUpdate: progress =>
+                            {
+                                UpdateQueueItemStatus(item, QueueItemStatus.Processing, progress);
+                            },
+                            throwOnError: true);
+
+                        if (item.MoveOriginal)
+                        {
+                            MoveOriginalFile(item.FilePath);
+                        }
+
+                        UpdateQueueItemStatus(item, QueueItemStatus.Done, "Done");
+                        AddToListBox($"Queue: Done {Path.GetFileName(item.FilePath)}");
+                    }
+                    catch (Exception ex)
+                    {
+                        UpdateQueueItemStatus(item, QueueItemStatus.Failed, ex.Message);
+                        AddToListBox($"Queue: Failed {Path.GetFileName(item.FilePath)} - {ex.Message}");
+                    }
+
+                    await Task.Delay(1);
+                }
+            }
+            finally
+            {
+                isQueueRunning = false;
+                ToggleQueueButtons(false);
+                if (queueStopRequested)
+                {
+                    AddToListBox("Queue: Stop requested. Paused after current item.");
+                }
+            }
+        }
+
+        private void ToggleQueueButtons(bool isRunning)
+        {
+            if (btnQueueStart != null)
+            {
+                btnQueueStart.Enabled = !isRunning;
+            }
+
+            if (btnQueueStop != null)
+            {
+                btnQueueStop.Enabled = isRunning;
+            }
+        }
+
+        private void ProcessWaveFile(string filePath, bool allowAutoConvert = true, bool throwOnError = false)
         {
             SetCustomCursor("busy");
             try
@@ -2431,7 +2653,7 @@ namespace WavConvert4Amiga
                 AddToListBox($"Original sample rate: {originalSampleRate}Hz");
                 AddToListBox($"Converted to: {targetSampleRate}Hz");
 
-                if (checkBoxAutoConvert.Checked)
+                if (allowAutoConvert && checkBoxAutoConvert.Checked)
                 {
                     ProcessWithCurrentSampleRate();
                     if (checkBoxMoveOriginal.Checked)
@@ -2442,6 +2664,11 @@ namespace WavConvert4Amiga
             }
             catch (Exception ex)
             {
+                if (throwOnError)
+                {
+                    throw;
+                }
+
                 MessageBox.Show($"Error processing file: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
@@ -2647,7 +2874,12 @@ namespace WavConvert4Amiga
                 }
             }
         }
-        private void ProcessWithCurrentSampleRate(object sender = null)
+        private void ProcessWithCurrentSampleRate(
+            object sender = null,
+            bool forceSave = false,
+            string outputPathOverride = null,
+            Action<string> progressUpdate = null,
+            bool throwOnError = false)
         {
             StopPreview();
             try
@@ -2656,6 +2888,11 @@ namespace WavConvert4Amiga
                 string sampleRateString = new string(selectedSampleRate.TakeWhile(char.IsDigit).ToArray());
                 if (!int.TryParse(sampleRateString, out int targetSampleRate) || targetSampleRate <= 0)
                 {
+                    if (throwOnError)
+                    {
+                        throw new InvalidOperationException("Invalid sample rate.");
+                    }
+
                     MessageBox.Show("Invalid sample rate.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
@@ -2761,16 +2998,24 @@ namespace WavConvert4Amiga
                 }
 
                 // Handle auto-save if requested
-                if (!isRecorded && !string.IsNullOrEmpty(lastLoadedFilePath) &&
-                    (checkBoxAutoConvert.Checked || (sender != null && sender.GetType() == typeof(Button))))
+                bool shouldSave = !isRecorded && !string.IsNullOrEmpty(lastLoadedFilePath) &&
+                    (forceSave || checkBoxAutoConvert.Checked || (sender != null && sender.GetType() == typeof(Button)));
+
+                if (shouldSave)
                 {
-                    SaveProcessedFile(pcmData, lastLoadedFilePath, targetSampleRate);
+                    progressUpdate?.Invoke("Saving");
+                    SaveProcessedFile(pcmData, lastLoadedFilePath, targetSampleRate, outputPathOverride, throwOnError);
                 }
 
                 AddToListBox($"Resampled to {targetSampleRate}Hz");
             }
             catch (Exception ex)
             {
+                if (throwOnError)
+                {
+                    throw;
+                }
+
                 MessageBox.Show($"Error processing audio: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -2900,7 +3145,12 @@ namespace WavConvert4Amiga
             AddToListBox("State cleared for new session");
         }
 
-        private void SaveProcessedFile(byte[] pcmData, string originalFilePath, int sampleRate)
+        private void SaveProcessedFile(
+            byte[] pcmData,
+            string originalFilePath,
+            int sampleRate,
+            string outputPathOverride = null,
+            bool throwOnError = false)
         {
             try
             {
@@ -2909,15 +3159,33 @@ namespace WavConvert4Amiga
                 string fileName = Path.GetFileNameWithoutExtension(originalFilePath);
                 string outputPath;
 
-                if (checkBoxEnable8SVX.Checked)
+                if (!string.IsNullOrWhiteSpace(outputPathOverride))
+                {
+                    outputPath = outputPathOverride;
+                }
+                else if (checkBoxEnable8SVX.Checked)
                 {
                     outputPath = Path.Combine(directory, $"{fileName}_{sampleRate}Hz.8svx");
-                    SaveAs8SVX(pcmData, outputPath, sampleRate);
                 }
                 else
                 {
                     // For WAV, check if 16-bit is requested
                     outputPath = Path.Combine(directory, $"{fileName}_{sampleRate}Hz.wav");
+                }
+
+                string outputExtension = Path.GetExtension(outputPath).ToLowerInvariant();
+                if (string.IsNullOrEmpty(outputExtension))
+                {
+                    outputExtension = checkBoxEnable8SVX.Checked ? ".8svx" : ".wav";
+                    outputPath += outputExtension;
+                }
+
+                if (outputExtension == ".8svx" || outputExtension == ".iff")
+                {
+                    SaveAs8SVX(pcmData, outputPath, sampleRate);
+                }
+                else
+                {
                     bool use16Bit = checkBox16BitWAV?.Checked ?? false;
 
                     // Create WAV file with appropriate bit depth
@@ -2971,6 +3239,11 @@ namespace WavConvert4Amiga
             }
             catch (Exception ex)
             {
+                if (throwOnError)
+                {
+                    throw;
+                }
+
                 MessageBox.Show($"Error saving file: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
@@ -3321,6 +3594,52 @@ namespace WavConvert4Amiga
             }
         }
 
+        private void btnQueueAddFiles_Click(object sender, EventArgs e)
+        {
+            using (OpenFileDialog dialog = new OpenFileDialog())
+            {
+                dialog.Filter = "Audio files (*.wav;*.8svx;*.iff)|*.wav;*.8svx;*.iff|All files (*.*)|*.*";
+                dialog.Multiselect = true;
+
+                if (dialog.ShowDialog() == DialogResult.OK)
+                {
+                    EnqueueFiles(dialog.FileNames);
+                }
+            }
+        }
+
+        private async void btnQueueStart_Click(object sender, EventArgs e)
+        {
+            await ProcessQueueAsync();
+        }
+
+        private void btnQueueStop_Click(object sender, EventArgs e)
+        {
+            if (!isQueueRunning)
+            {
+                return;
+            }
+
+            queueStopRequested = true;
+            AddToListBox("Queue: Stop requested.");
+        }
+
+        private void btnQueueClearCompleted_Click(object sender, EventArgs e)
+        {
+            var completedItems = conversionQueue.Where(item => item.Status == QueueItemStatus.Done).ToList();
+            foreach (QueueItem item in completedItems)
+            {
+                conversionQueue.Remove(item);
+                if (queueRows.TryGetValue(item, out DataGridViewRow row))
+                {
+                    dataGridViewQueue.Rows.Remove(row);
+                    queueRows.Remove(item);
+                }
+            }
+
+            AddToListBox($"Queue: Cleared {completedItems.Count} completed item(s).");
+        }
+
         private void btnManualConvert_Click_1(object sender, EventArgs e)
         {
             if (string.IsNullOrEmpty(lastLoadedFilePath) && !isRecorded)
@@ -3386,4 +3705,3 @@ namespace WavConvert4Amiga
 
     }
     }
-

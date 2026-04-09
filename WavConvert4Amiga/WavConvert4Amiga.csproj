@@ -107,6 +107,7 @@
     <Compile Include="RecordingIndicator.cs">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Include="QueueItem.cs" />
     <Compile Include="SimpleLoopingProvider.cs" />
     <Compile Include="STSampleLoader.cs" />
     <Compile Include="SVXLoader.cs" />
