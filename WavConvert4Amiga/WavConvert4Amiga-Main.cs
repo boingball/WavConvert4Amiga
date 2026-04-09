@@ -259,6 +259,7 @@ namespace WavConvert4Amiga
 
         private void MainForm_Load(object sender, EventArgs e)
         {
+            previousClientSize = this.ClientSize;
             panel1.AllowDrop = true;
             panel1.DragEnter += panel1_DragEnter;
             panel1.DragDrop += panel1_DragDrop;
@@ -381,6 +382,41 @@ namespace WavConvert4Amiga
             finally
             {
                 ResumeLayout(true);
+            }
+        }
+
+        private void MainForm_Resize(object sender, EventArgs e)
+        {
+            if (isApplyingResizeScale)
+            {
+                return;
+            }
+
+            if (previousClientSize.Width <= 0 || previousClientSize.Height <= 0)
+            {
+                previousClientSize = this.ClientSize;
+                return;
+            }
+
+            float widthScale = (float)this.ClientSize.Width / previousClientSize.Width;
+            float heightScale = (float)this.ClientSize.Height / previousClientSize.Height;
+
+            if (Math.Abs(widthScale - 1f) < 0.001f && Math.Abs(heightScale - 1f) < 0.001f)
+            {
+                return;
+            }
+
+            try
+            {
+                isApplyingResizeScale = true;
+                this.SuspendLayout();
+                this.Scale(new SizeF(widthScale, heightScale));
+            }
+            finally
+            {
+                this.ResumeLayout(true);
+                isApplyingResizeScale = false;
+                previousClientSize = this.ClientSize;
             }
         }
 
