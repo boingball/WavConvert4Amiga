@@ -83,6 +83,8 @@ namespace WavConvert4Amiga
         private readonly Dictionary<QueueItem, DataGridViewRow> queueRows = new Dictionary<QueueItem, DataGridViewRow>();
         private bool isQueueRunning = false;
         private bool queueStopRequested = false;
+        private Size previousClientSize;
+        private bool isApplyingResizeScale = false;
 
 
         private Dictionary<string, (int pal, int ntsc)> ptNoteToHz = new Dictionary<string, (int pal, int ntsc)>()
@@ -249,10 +251,14 @@ namespace WavConvert4Amiga
                 comboBoxSampleRate.ForeColor = Color.FromArgb(180, 190, 210);
                 comboBoxSampleRate.Font = FontManager.GetMainFont(9f, FontStyle.Regular);
             }
+
+            previousClientSize = this.ClientSize;
+            this.Resize += MainForm_Resize;
         }
 
         private void MainForm_Load(object sender, EventArgs e)
         {
+            previousClientSize = this.ClientSize;
             panel1.AllowDrop = true;
             panel1.DragEnter += panel1_DragEnter;
             panel1.DragDrop += panel1_DragDrop;
@@ -273,6 +279,41 @@ namespace WavConvert4Amiga
 
             // Optionally select a default value
             comboBoxSampleRate.SelectedIndex = 5; // Select the first item by default
+        }
+
+        private void MainForm_Resize(object sender, EventArgs e)
+        {
+            if (isApplyingResizeScale)
+            {
+                return;
+            }
+
+            if (previousClientSize.Width <= 0 || previousClientSize.Height <= 0)
+            {
+                previousClientSize = this.ClientSize;
+                return;
+            }
+
+            float widthScale = (float)this.ClientSize.Width / previousClientSize.Width;
+            float heightScale = (float)this.ClientSize.Height / previousClientSize.Height;
+
+            if (Math.Abs(widthScale - 1f) < 0.001f && Math.Abs(heightScale - 1f) < 0.001f)
+            {
+                return;
+            }
+
+            try
+            {
+                isApplyingResizeScale = true;
+                this.SuspendLayout();
+                this.Scale(new SizeF(widthScale, heightScale));
+            }
+            finally
+            {
+                this.ResumeLayout(true);
+                isApplyingResizeScale = false;
+                previousClientSize = this.ClientSize;
+            }
         }
 
         private void InitializeCursors()
