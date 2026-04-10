@@ -2,7 +2,7 @@
 
 A Windows utility designed to convert WAV/MP3 files for optimal use with Amiga computers and music trackers. Features an intuitive interface for sample rate conversion, waveform editing, and ProTracker note tuning.
 
-![WavConvert4Amiga GUI v1.2](wc4a-gui-1.2.jpeg?raw=true "Title")
+![WavConvert4Amiga GUI v1.5](wc4a-gui-1.5.jpg?raw=true "Title")
 ## Features
 
 ### Audio Processing
