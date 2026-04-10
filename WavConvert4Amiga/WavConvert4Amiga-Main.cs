@@ -97,6 +97,7 @@ namespace WavConvert4Amiga
         private Label labelChipQualityValue;
         private Label labelChipCrunchValue;
         private bool suppressSampleRateChangeEvents = false;
+        private (double startSeconds, double endSeconds)? cropSelectionSeconds = null;
 
 
         private Dictionary<string, (int pal, int ntsc)> ptNoteToHz = new Dictionary<string, (int pal, int ntsc)>()
@@ -126,7 +127,8 @@ namespace WavConvert4Amiga
                 sampleRate,
                 currentCutRegions.ToList(),
                 amplificationFactor,
-                currentEffects.ToList()
+                currentEffects.ToList(),
+                cropSelectionSeconds
             );
         }
 
@@ -1114,6 +1116,7 @@ namespace WavConvert4Amiga
 
             // Add cut marker for counting/logging
             currentCutRegions.Add((start, end));
+            cropSelectionSeconds = null;
 
             // Update waveform display with the new cut data
             waveformViewer.SetAudioData(currentPcmData);
@@ -1143,6 +1146,7 @@ namespace WavConvert4Amiga
             }
 
             int originalLength = currentPcmData.Length;
+            int currentSampleRate = waveformViewer?.CurrentSampleRate ?? GetSelectedSampleRate();
 
             PushUndo(currentPcmData);
             redoStack.Clear();
@@ -1151,14 +1155,12 @@ namespace WavConvert4Amiga
             Array.Copy(currentPcmData, start, keptData, 0, end - start);
             currentPcmData = keptData;
 
-            // Track this as removing everything before and after the selected area.
-            if (end < originalLength)
+            if (currentSampleRate > 0)
             {
-                currentCutRegions.Add((end, originalLength));
-            }
-            if (start > 0)
-            {
-                currentCutRegions.Add((0, start));
+                cropSelectionSeconds = (
+                    startSeconds: (double)start / currentSampleRate,
+                    endSeconds: (double)end / currentSampleRate
+                );
             }
 
             waveformViewer.SetAudioData(currentPcmData);
@@ -1192,6 +1194,7 @@ namespace WavConvert4Amiga
             currentEffects = previousState.AppliedEffects.ToList();
             currentCutRegions = previousState.CutRegions.ToList();
             amplificationFactor = previousState.AmplificationFactor;
+            cropSelectionSeconds = previousState.CropSelectionSeconds;
 
             // CRITICAL FIX: Update sample rate in UI to match the restored state
             SetSampleRateComboTextWithoutProcessing(previousState.SampleRate);
@@ -1305,6 +1308,9 @@ namespace WavConvert4Amiga
                 {
                     result = waveformProcessor.ApplyAmplification(result, amplification);
                 }
+
+                // Step 3b: Re-apply crop-to-loop selection in time domain, if set.
+                result = ApplyStoredCropSelection(result, targetSampleRate);
 
                 // Step 4: Apply effects
                 if (effects != null)
@@ -1732,7 +1738,8 @@ namespace WavConvert4Amiga
                 sampleRate,
                 currentCutRegions.ToList(),
                 amplificationFactor,
-                currentEffects.ToList()
+                currentEffects.ToList(),
+                cropSelectionSeconds
             );
 
             undoStack.Push(state);
@@ -1767,6 +1774,7 @@ namespace WavConvert4Amiga
             currentEffects = redoState.AppliedEffects.ToList();
             currentCutRegions = redoState.CutRegions.ToList();
             amplificationFactor = redoState.AmplificationFactor;
+            cropSelectionSeconds = redoState.CropSelectionSeconds;
 
             // CRITICAL FIX: Update sample rate in UI to match the restored state
             SetSampleRateComboTextWithoutProcessing(redoState.SampleRate);
@@ -1801,7 +1809,8 @@ namespace WavConvert4Amiga
                 sampleRate,
                 currentCutRegions.ToList(),
                 amplificationFactor,
-                currentEffects.ToList()
+                currentEffects.ToList(),
+                cropSelectionSeconds
             );
 
             redoStack.Push(state);
@@ -2263,6 +2272,29 @@ namespace WavConvert4Amiga
                 amplificationFactor,
                 currentEffects
             );
+        }
+
+        private byte[] ApplyStoredCropSelection(byte[] data, int sampleRate)
+        {
+            if (data == null || sampleRate <= 0 || cropSelectionSeconds == null)
+            {
+                return data;
+            }
+
+            int cropStart = (int)Math.Round(cropSelectionSeconds.Value.startSeconds * sampleRate);
+            int cropEnd = (int)Math.Round(cropSelectionSeconds.Value.endSeconds * sampleRate);
+
+            cropStart = Math.Max(0, Math.Min(cropStart, data.Length));
+            cropEnd = Math.Max(cropStart, Math.Min(cropEnd, data.Length));
+
+            if (cropEnd <= cropStart)
+            {
+                return data;
+            }
+
+            byte[] cropped = new byte[cropEnd - cropStart];
+            Array.Copy(data, cropStart, cropped, 0, cropped.Length);
+            return cropped;
         }
         private static byte Clamp(byte value, byte min, byte max)
         {
@@ -2935,6 +2967,9 @@ namespace WavConvert4Amiga
                         }
                     }
                 }
+
+                // Step 2b: If crop-to-loop was used, re-apply that crop in time domain.
+                result = ApplyStoredCropSelection(result, targetSampleRate);
 
                 // Step 3: Apply amplification if not default
                 if (amplificationFactor != 1.0f)
@@ -3629,6 +3664,7 @@ namespace WavConvert4Amiga
                 // Clear all modification lists
                 currentEffects.Clear();
                 currentCutRegions.Clear();
+                cropSelectionSeconds = null;
                 amplificationFactor = 1.0f;
                 trackBarAmplify.Value = 100;
                 labelAmplify.Text = "Amplify: 100%";
@@ -3643,7 +3679,8 @@ namespace WavConvert4Amiga
                     originalFormat.SampleRate, // Use ORIGINAL sample rate, not current UI selection
                     currentCutRegions.ToList(),
                     amplificationFactor,
-                    currentEffects.ToList()
+                    currentEffects.ToList(),
+                    cropSelectionSeconds
                 );
 
                 undoStack.Push(initialState);
@@ -4104,6 +4141,7 @@ namespace WavConvert4Amiga
             // Clear all modification tracking
             currentEffects.Clear();
             currentCutRegions.Clear();
+            cropSelectionSeconds = null;
             amplificationFactor = 1.0f;
 
             // Reset UI elements
