@@ -26,6 +26,8 @@ namespace WavConvert4Amiga
 
         public event EventHandler<(int start, int end)> LoopPointsChanged;
         private bool isDraggingEnd = false;
+        private bool isSelectingSecondPoint = false;
+        private int previewLoopEnd = -1;
         private const int DRAG_THRESHOLD = 5;
         private const float ZOOM_STEP = 1.5f;
         private const float MAX_ZOOM = 10.0f;
@@ -220,6 +222,8 @@ namespace WavConvert4Amiga
         {
             loopStart = -1;
             loopEnd = -1;
+            previewLoopEnd = -1;
+            isSelectingSecondPoint = false;
             LoopPointsChanged?.Invoke(this, (-1, -1));
             Invalidate();
         }
@@ -236,6 +240,11 @@ namespace WavConvert4Amiga
             if (e.Button == MouseButtons.Right)
             {
                 ClearLoopPoints();
+                return;
+            }
+
+            if (e.Button != MouseButtons.Left)
+            {
                 return;
             }
 
@@ -265,14 +274,8 @@ namespace WavConvert4Amiga
             }
             else if (loopEnd == -1)
             {
-                loopEnd = clickedSample;
-                if (loopEnd < loopStart)
-                {
-                    int temp = loopStart;
-                    loopStart = loopEnd;
-                    loopEnd = temp;
-                }
-                LoopPointsChanged?.Invoke(this, (loopStart, loopEnd));
+                isSelectingSecondPoint = true;
+                previewLoopEnd = clickedSample;
             }
             else
             {
@@ -288,7 +291,18 @@ namespace WavConvert4Amiga
 
             int newSample = XToSample(Math.Max(0, Math.Min(e.X, Width)));
 
-            if (isDraggingStart)
+            if (isSelectingSecondPoint)
+            {
+                if (newSample != previewLoopEnd)
+                {
+                    previewLoopEnd = newSample;
+                    int previewStart = Math.Min(loopStart, previewLoopEnd);
+                    int previewEnd = Math.Max(loopStart, previewLoopEnd);
+                    LoopPointsChanged?.Invoke(this, (previewStart, previewEnd));
+                    Invalidate();
+                }
+            }
+            else if (isDraggingStart)
             {
                 if (newSample != loopStart && (loopEnd == -1 || newSample < loopEnd))
                 {
@@ -372,6 +386,25 @@ namespace WavConvert4Amiga
                 }
             }
 
+            int effectiveLoopEnd = isSelectingSecondPoint ? previewLoopEnd : loopEnd;
+            if (loopStart >= 0 && effectiveLoopEnd >= 0)
+            {
+                int selectionStart = Math.Min(loopStart, effectiveLoopEnd);
+                int selectionEnd = Math.Max(loopStart, effectiveLoopEnd);
+                int startX = SampleToX(selectionStart);
+                int endX = SampleToX(selectionEnd);
+                int drawStartX = Math.Max(0, Math.Min(startX, endX));
+                int drawEndX = Math.Min(Width, Math.Max(startX, endX));
+                int selectionWidth = Math.Max(0, drawEndX - drawStartX);
+                if (selectionWidth > 0)
+                {
+                    using (var selectionBrush = new SolidBrush(Color.FromArgb(60, Color.OrangeRed)))
+                    {
+                        e.Graphics.FillRectangle(selectionBrush, drawStartX, 0, selectionWidth, Height);
+                    }
+                }
+            }
+
             if (loopEnd >= 0)
             {
                 using (var pen = new Pen(Color.Red, 2))
@@ -379,6 +412,17 @@ namespace WavConvert4Amiga
                     int x = (int)((long)(loopEnd - scrollPosition) * Width / (audioData.Length / zoomFactor));
                     if (x >= 0 && x < Width)
                         e.Graphics.DrawLine(pen, x, 0, x, Height);
+                }
+            }
+            else if (isSelectingSecondPoint && previewLoopEnd >= 0)
+            {
+                using (var pen = new Pen(Color.OrangeRed, 2))
+                {
+                    int x = SampleToX(previewLoopEnd);
+                    if (x >= 0 && x < Width)
+                    {
+                        e.Graphics.DrawLine(pen, x, 0, x, Height);
+                    }
                 }
             }
 
@@ -396,6 +440,22 @@ namespace WavConvert4Amiga
 
         protected override void OnMouseUp(MouseEventArgs e)
         {
+            if (isSelectingSecondPoint && e.Button == MouseButtons.Left)
+            {
+                int releasedSample = XToSample(Math.Max(0, Math.Min(e.X, Width)));
+                previewLoopEnd = releasedSample;
+                int newStart = Math.Min(loopStart, previewLoopEnd);
+                int newEnd = Math.Max(loopStart, previewLoopEnd);
+
+                loopStart = newStart;
+                loopEnd = newEnd;
+                previewLoopEnd = -1;
+                isSelectingSecondPoint = false;
+
+                LoopPointsChanged?.Invoke(this, (loopStart, loopEnd));
+                Invalidate();
+            }
+
             isDraggingStart = false;
             isDraggingEnd = false;
             base.OnMouseUp(e);
