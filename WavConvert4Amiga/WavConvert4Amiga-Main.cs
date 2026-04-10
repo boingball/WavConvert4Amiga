@@ -925,9 +925,12 @@ namespace WavConvert4Amiga
             if (ptNoteToHz.TryGetValue(selectedNote, out var rates))
             {
                 int hz = checkBoxNTSC.Checked ? rates.ntsc : rates.pal;
-                comboBoxSampleRate.Text = hz.ToString() + "Hz";
+                string videoStandard = checkBoxNTSC.Checked ? "NTSC" : "PAL";
+                string proTrackerLabel = $"{hz}Hz - ProTracker {selectedNote} ({videoStandard})";
+                SetSampleRateComboTextWithoutProcessing(hz, proTrackerLabel);
+                StopPreview();
                 ProcessSampleRateChange();
-                AddToListBox($"Note {selectedNote} - {(checkBoxNTSC.Checked ? "NTSC" : "PAL")} {hz}Hz");
+                AddToListBox($"Note {selectedNote} - {videoStandard} {hz}Hz");
             }
         }
 
@@ -3957,12 +3960,44 @@ namespace WavConvert4Amiga
             ProcessSampleRateChange();
         }
 
-        private void SetSampleRateComboTextWithoutProcessing(int sampleRate)
+        private void SetSampleRateComboTextWithoutProcessing(int sampleRate, string preferredLabel = null)
         {
             suppressSampleRateChangeEvents = true;
             try
             {
-                comboBoxSampleRate.Text = $"{sampleRate}Hz";
+                string fallbackLabel = $"{sampleRate}Hz";
+                string targetLabel = string.IsNullOrWhiteSpace(preferredLabel) ? fallbackLabel : preferredLabel;
+
+                int exactMatchIndex = comboBoxSampleRate.FindStringExact(targetLabel);
+                if (exactMatchIndex >= 0)
+                {
+                    comboBoxSampleRate.SelectedIndex = exactMatchIndex;
+                    return;
+                }
+
+                // Reuse an existing entry for this sample rate if one exists, even if text differs.
+                int sampleRateMatchIndex = -1;
+                for (int i = 0; i < comboBoxSampleRate.Items.Count; i++)
+                {
+                    string text = comboBoxSampleRate.Items[i]?.ToString() ?? string.Empty;
+                    string numericPrefix = new string(text.TakeWhile(char.IsDigit).ToArray());
+                    if (int.TryParse(numericPrefix, out int existingRate) && existingRate == sampleRate)
+                    {
+                        sampleRateMatchIndex = i;
+                        break;
+                    }
+                }
+
+                if (sampleRateMatchIndex >= 0)
+                {
+                    comboBoxSampleRate.Items[sampleRateMatchIndex] = targetLabel;
+                    comboBoxSampleRate.SelectedIndex = sampleRateMatchIndex;
+                }
+                else
+                {
+                    comboBoxSampleRate.Items.Add(targetLabel);
+                    comboBoxSampleRate.SelectedIndex = comboBoxSampleRate.Items.Count - 1;
+                }
             }
             finally
             {
