@@ -27,6 +27,7 @@ namespace WavConvert4Amiga
         public event EventHandler<(int start, int end)> LoopPointsChanged;
         private bool isDraggingEnd = false;
         private bool isSelectingSecondPoint = false;
+        private int selectionAnchor = -1;
         private int previewLoopEnd = -1;
         private const int DRAG_THRESHOLD = 5;
         private const float ZOOM_STEP = 1.5f;
@@ -222,6 +223,7 @@ namespace WavConvert4Amiga
         {
             loopStart = -1;
             loopEnd = -1;
+            selectionAnchor = -1;
             previewLoopEnd = -1;
             isSelectingSecondPoint = false;
             LoopPointsChanged?.Invoke(this, (-1, -1));
@@ -248,6 +250,16 @@ namespace WavConvert4Amiga
                 return;
             }
 
+            // If only first point exists, begin drag-selecting second point.
+            if (loopStart >= 0 && loopEnd == -1)
+            {
+                isSelectingSecondPoint = true;
+                selectionAnchor = loopStart;
+                previewLoopEnd = clickedSample;
+                Capture = true;
+                return;
+            }
+
             // If we're near either loop point, start dragging it
             if (loopStart >= 0 && Math.Abs(SampleToX(loopStart) - e.X) <= DRAG_THRESHOLD)
             {
@@ -271,33 +283,45 @@ namespace WavConvert4Amiga
             if (loopStart == -1)
             {
                 loopStart = clickedSample;
+                isSelectingSecondPoint = true;
+                selectionAnchor = clickedSample;
+                previewLoopEnd = clickedSample;
+                Capture = true;
             }
             else if (loopEnd == -1)
             {
                 isSelectingSecondPoint = true;
+                selectionAnchor = loopStart;
                 previewLoopEnd = clickedSample;
+                Capture = true;
             }
             else
             {
-                // Start new loop points
-                ClearLoopPoints();
+                // Start a new drag selection from this point.
                 loopStart = clickedSample;
+                loopEnd = -1;
+                isSelectingSecondPoint = true;
+                selectionAnchor = clickedSample;
+                previewLoopEnd = clickedSample;
+                Capture = true;
             }
             Invalidate();
         }
         protected override void OnMouseMove(MouseEventArgs e)
         {
-            if (audioData == null || (e.Button != MouseButtons.Left)) return;
+            if (audioData == null) return;
 
             int newSample = XToSample(Math.Max(0, Math.Min(e.X, Width)));
 
             if (isSelectingSecondPoint)
             {
+                if ((Control.MouseButtons & MouseButtons.Left) == 0) return;
+
                 if (newSample != previewLoopEnd)
                 {
                     previewLoopEnd = newSample;
-                    int previewStart = Math.Min(loopStart, previewLoopEnd);
-                    int previewEnd = Math.Max(loopStart, previewLoopEnd);
+                    int previewStart = Math.Min(selectionAnchor, previewLoopEnd);
+                    int previewEnd = Math.Max(selectionAnchor, previewLoopEnd);
                     LoopPointsChanged?.Invoke(this, (previewStart, previewEnd));
                     Invalidate();
                 }
@@ -444,13 +468,20 @@ namespace WavConvert4Amiga
             {
                 int releasedSample = XToSample(Math.Max(0, Math.Min(e.X, Width)));
                 previewLoopEnd = releasedSample;
-                int newStart = Math.Min(loopStart, previewLoopEnd);
-                int newEnd = Math.Max(loopStart, previewLoopEnd);
+                int newStart = Math.Min(selectionAnchor, previewLoopEnd);
+                int newEnd = Math.Max(selectionAnchor, previewLoopEnd);
+
+                if (newEnd == newStart)
+                {
+                    newEnd = Math.Min(audioData.Length, newStart + 1);
+                }
 
                 loopStart = newStart;
                 loopEnd = newEnd;
+                selectionAnchor = -1;
                 previewLoopEnd = -1;
                 isSelectingSecondPoint = false;
+                Capture = false;
 
                 LoopPointsChanged?.Invoke(this, (loopStart, loopEnd));
                 Invalidate();
