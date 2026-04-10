@@ -353,6 +353,9 @@ namespace WavConvert4Amiga
 
                 float[] source = BytesToFloats(input);
                 float[] output = new float[source.Length];
+                int analysisFactor = GetAnalysisDownsampleFactor(sampleRate);
+                int analysisSampleRate = Math.Max(1, sampleRate / analysisFactor);
+                float[] analysisSource = BuildAnalysisSignal(source, analysisFactor);
 
                 int frameSize = Math.Max(128, sampleRate / 90); // ~11ms
                 int hopSize = Math.Max(64, frameSize / 2);
@@ -375,10 +378,13 @@ namespace WavConvert4Amiga
                         continue;
                     }
 
-                    float freq = EstimateFundamentalFrequency(source, sampleRate, start, len, 85, 1600);
+                    int analysisStart = Math.Max(0, Math.Min(analysisSource.Length - 1, start / analysisFactor));
+                    int analysisLen = Math.Max(32, Math.Min(analysisSource.Length - analysisStart, len / analysisFactor));
+
+                    float freq = EstimateFundamentalFrequency(analysisSource, analysisSampleRate, analysisStart, analysisLen, 85, 1600);
                     pitchTrack[frame] = freq > 0 ? QuantizeFrequencyToSemitone(freq) : (frame > 0 ? pitchTrack[frame - 1] : 220f);
-                    rmsTrack[frame] = EstimateRms(source, start, len);
-                    zcrTrack[frame] = EstimateZeroCrossingRate(source, start, len);
+                    rmsTrack[frame] = EstimateRms(analysisSource, analysisStart, analysisLen);
+                    zcrTrack[frame] = EstimateZeroCrossingRate(analysisSource, analysisStart, analysisLen);
                 }
 
                 float phase = 0f;
@@ -415,6 +421,7 @@ namespace WavConvert4Amiga
                     output[i] = (synth * smoothedEnv * 1.25f) + (transient * 0.35f);
                 }
 
+                ApplySampleAndHold(output, Math.Max(1, sampleRate / 12000));
                 return ConvertToBytes(output, 1.0f);
             }
             finally
@@ -435,6 +442,9 @@ namespace WavConvert4Amiga
 
                 float[] source = BytesToFloats(input);
                 float[] output = new float[source.Length];
+                int analysisFactor = GetAnalysisDownsampleFactor(sampleRate);
+                int analysisSampleRate = Math.Max(1, sampleRate / analysisFactor);
+                float[] analysisSource = BuildAnalysisSignal(source, analysisFactor);
 
                 int frameSize = Math.Max(256, sampleRate / 80); // ~12ms
                 int hopSize = Math.Max(64, frameSize / 4);
@@ -462,9 +472,12 @@ namespace WavConvert4Amiga
                         continue;
                     }
 
-                    float freq = EstimateFundamentalFrequency(source, sampleRate, start, len, 70, 1800);
-                    float zcr = EstimateZeroCrossingRate(source, start, len);
-                    float rms = EstimateRms(source, start, len);
+                    int analysisStart = Math.Max(0, Math.Min(analysisSource.Length - 1, start / analysisFactor));
+                    int analysisLen = Math.Max(32, Math.Min(analysisSource.Length - analysisStart, len / analysisFactor));
+
+                    float freq = EstimateFundamentalFrequency(analysisSource, analysisSampleRate, analysisStart, analysisLen, 70, 1800);
+                    float zcr = EstimateZeroCrossingRate(analysisSource, analysisStart, analysisLen);
+                    float rms = EstimateRms(analysisSource, analysisStart, analysisLen);
                     bool voiced = freq > 0 && zcr < 0.50f && rms > 0.008f;
 
                     if (voiced)
@@ -534,6 +547,7 @@ namespace WavConvert4Amiga
                     output[i] = synth + noise + dryBlend;
                 }
 
+                ApplySampleAndHold(output, Math.Max(1, sampleRate / 10000));
                 return ConvertToBytes(output, 1.0f);
             }
             finally
@@ -761,6 +775,58 @@ namespace WavConvert4Amiga
         private float Lerp(float a, float b, float t)
         {
             return a + ((b - a) * Math.Max(0f, Math.Min(1f, t)));
+        }
+
+        private int GetAnalysisDownsampleFactor(int sampleRate)
+        {
+            int targetRate = 11025;
+            int factor = Math.Max(1, sampleRate / targetRate);
+            return Math.Min(8, factor);
+        }
+
+        private float[] BuildAnalysisSignal(float[] source, int factor)
+        {
+            if (factor <= 1 || source.Length < 2)
+            {
+                return source;
+            }
+
+            // simple low-pass + decimate for more stable pitch tracking
+            float[] lowPassed = new float[source.Length];
+            float last = 0f;
+            float alpha = 0.25f;
+            for (int i = 0; i < source.Length; i++)
+            {
+                last += (source[i] - last) * alpha;
+                lowPassed[i] = last;
+            }
+
+            int len = Math.Max(1, source.Length / factor);
+            float[] down = new float[len];
+            for (int i = 0; i < len; i++)
+            {
+                down[i] = lowPassed[Math.Min(lowPassed.Length - 1, i * factor)];
+            }
+
+            return down;
+        }
+
+        private void ApplySampleAndHold(float[] samples, int holdSamples)
+        {
+            if (samples == null || samples.Length == 0 || holdSamples <= 1)
+            {
+                return;
+            }
+
+            float held = samples[0];
+            for (int i = 0; i < samples.Length; i++)
+            {
+                if (i % holdSamples == 0)
+                {
+                    held = samples[i];
+                }
+                samples[i] = held;
+            }
         }
 
         private float QuantizeFrequencyToSemitone(float frequency)
