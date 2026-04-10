@@ -2806,6 +2806,7 @@ namespace WavConvert4Amiga
             {
                 int targetSampleRate = GetSelectedSampleRate();
                 int currentSampleRate = waveformViewer?.CurrentSampleRate ?? targetSampleRate;
+                var (oldLoopStart, oldLoopEnd) = waveformViewer.GetLoopPoints();
                 AddToListBox($"Converting to {targetSampleRate}Hz...");
 
                 // Create undo point BEFORE changing sample rate
@@ -2945,6 +2946,20 @@ namespace WavConvert4Amiga
                 // Update display
                 waveformViewer.SetAudioData(currentPcmData);
                 waveformViewer.SetSampleRate(targetSampleRate);
+
+                // Preserve existing loop selection by converting marker positions using time.
+                // This keeps the same audible region selected even when byte/sample length changes.
+                if (oldLoopStart >= 0 && oldLoopEnd > oldLoopStart)
+                {
+                    double sampleRateRatio = currentSampleRate > 0
+                        ? (double)targetSampleRate / currentSampleRate
+                        : 1.0;
+
+                    int newLoopStart = Math.Max(0, Math.Min((int)Math.Round(oldLoopStart * sampleRateRatio), Math.Max(0, currentPcmData.Length - 1)));
+                    int newLoopEnd = (int)Math.Round(oldLoopEnd * sampleRateRatio);
+                    newLoopEnd = Math.Max(newLoopStart + 1, Math.Min(newLoopEnd, currentPcmData.Length));
+                    waveformViewer.RestoreLoopPoints(newLoopStart, newLoopEnd);
+                }
 
                 AddToListBox($"Conversion to {targetSampleRate}Hz complete. Preserved {currentCutRegions.Count} cuts, {currentEffects.Count} effects");
             }
