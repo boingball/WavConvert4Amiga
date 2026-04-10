@@ -102,6 +102,7 @@ namespace WavConvert4Amiga
         private CheckBox checkBoxShowPad;
         private Panel pianoPanel;
         private Button btnPadAssign;
+        private ContextMenuStrip padAssignContextMenu;
         private readonly Dictionary<Keys, int> pianoKeyOffsets = new Dictionary<Keys, int>
         {
             { Keys.Z, 0 }, { Keys.S, 1 }, { Keys.X, 2 }, { Keys.D, 3 }, { Keys.C, 4 }, { Keys.V, 5 },
@@ -920,8 +921,12 @@ namespace WavConvert4Amiga
                 return;
             }
 
-            var menu = new ContextMenuStrip();
-            menu.Closed += (s, args) => menu.Dispose();
+            if (padAssignContextMenu == null || padAssignContextMenu.IsDisposed)
+            {
+                padAssignContextMenu = new ContextMenuStrip();
+            }
+
+            padAssignContextMenu.Items.Clear();
             for (int i = 0; i < 16; i++)
             {
                 int slot = i;
@@ -933,14 +938,14 @@ namespace WavConvert4Amiga
 
                 var item = new ToolStripMenuItem(slotLabel);
                 item.Click += (s, args) => AssignCurrentSampleToPadSlot(slot);
-                menu.Items.Add(item);
+                padAssignContextMenu.Items.Add(item);
             }
 
             var button = sender as Control;
             Point menuPoint = button != null
                 ? button.PointToScreen(new Point(0, button.Height))
                 : Cursor.Position;
-            menu.Show(menuPoint);
+            padAssignContextMenu.Show(menuPoint);
         }
 
         private void AssignCurrentSampleToPadSlot(int slot)
@@ -5006,6 +5011,7 @@ namespace WavConvert4Amiga
             padWaveOut?.Dispose();
             padWaveStream?.Dispose();
             padAudioStream?.Dispose();
+            padAssignContextMenu?.Dispose();
             samplePadForm?.Close();
         }
 
