@@ -286,6 +286,10 @@ namespace WavConvert4Amiga
             if (loopStart == -1)
             {
                 loopStart = clickedSample;
+                isSelectingSecondPoint = true;
+                selectionAnchor = clickedSample;
+                previewLoopEnd = clickedSample;
+                Capture = true;
             }
             else if (loopEnd == -1)
             {
