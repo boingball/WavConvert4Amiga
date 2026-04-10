@@ -13,9 +13,11 @@ namespace WavConvert4Amiga
         public List<(int start, int end)> CutRegions { get; private set; }
         public float AmplificationFactor { get; private set; }
         public List<string> AppliedEffects { get; private set; }
+        public (double startSeconds, double endSeconds)? CropSelectionSeconds { get; private set; }
 
         public AudioState(byte[] audioData, int sampleRate, List<(int start, int end)> cutRegions = null,
-                         float amplificationFactor = 1.0f, List<string> appliedEffects = null)
+                         float amplificationFactor = 1.0f, List<string> appliedEffects = null,
+                         (double startSeconds, double endSeconds)? cropSelectionSeconds = null)
         {
             AudioData = new byte[audioData.Length];
             Array.Copy(audioData, AudioData, audioData.Length);
@@ -23,6 +25,7 @@ namespace WavConvert4Amiga
             CutRegions = cutRegions?.ToList() ?? new List<(int start, int end)>();
             AmplificationFactor = amplificationFactor;
             AppliedEffects = appliedEffects?.ToList() ?? new List<string>();
+            CropSelectionSeconds = cropSelectionSeconds;
         }
     }
 }
