@@ -1662,12 +1662,6 @@ namespace WavConvert4Amiga
             btnBackToMasterSample.Click += BtnBackToMasterSample_Click;
             waveformControlPanel.Controls.Add(btnBackToMasterSample);
 
-            btnPadAssign = new RetroButton();
-            btnPadAssign.Text = "PAD";
-            btnPadAssign.Size = buttonSize;
-            btnPadAssign.Click += BtnPadAssign_Click;
-            controlPanel.Controls.Add(btnPadAssign);
-
             // Initialize the waveform viewer AFTER the control panel
             waveformViewer = new WaveformViewer();
             waveformViewer.Dock = DockStyle.Fill;
