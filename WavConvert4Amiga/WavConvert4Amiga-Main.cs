@@ -1681,11 +1681,9 @@ namespace WavConvert4Amiga
                 waveformViewer.SetAudioData(currentPcmData);
             }
 
-            BeginInvoke(new Action(() =>
-            {
-                waveformControlPanel?.PerformLayout();
-                panelWaveform?.PerformLayout();
-            }));
+            // Do not call BeginInvoke here: this method runs during form construction
+            // before the window handle exists on some machines/configurations.
+            // Initial layout is handled in the form Shown handler.
         }
 
         private void BtnZoomIn_Click(object sender, EventArgs e)
