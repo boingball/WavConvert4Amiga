@@ -10,8 +10,10 @@ A Windows utility designed to convert WAV/MP3 files for optimal use with Amiga c
 - Load MP3 files and decode them into the same editable workflow as WAV files
 - Support for both PAL and NTSC frequencies
 - ProTracker note frequency conversion (C-1 to B-3)
+- Tracker-style Piano Mode (mouse + keyboard input for note auditioning)
 - Chipify Mono effect (single-note chip-style resynthesis with envelope following)
 - Chipify Deluxe effect (frame pitch-tracking with chip wave selection and resynthesis)
+- Additional AudioFX: chorus, overdrive, reverse, fades, band-pass, noise gate
 - Built-in low-pass filter option
 - Adjustable amplification control
 - 8SVX file format support
@@ -21,6 +23,7 @@ A Windows utility designed to convert WAV/MP3 files for optimal use with Amiga c
 - Visual waveform display with zoom controls
 - Set and adjust loop points
 - Cut unwanted sections
+- Save the currently selected sample section directly from the waveform toolbar
 - Preview audio with loop points
 - Undo/Redo support
 
@@ -33,6 +36,8 @@ A Windows utility designed to convert WAV/MP3 files for optimal use with Amiga c
 ### File Handling
 - Drag and drop WAV/MP3 file support
 - Auto-convert option for batch processing
+- Built-in conversion queue (add files, process queue, pause/stop, clear completed)
+- Per-queue-item settings via context menu (sample rate, low-pass, output format, move original, etc.)
 - Original file preservation option
 - Save as WAV or 8SVX format
 - Save loop selections separately
@@ -45,6 +50,13 @@ A Windows utility designed to convert WAV/MP3 files for optimal use with Amiga c
 3. Adjust amplification if needed
 4. Enable low-pass filter if desired
 5. Click "Convert Current" or enable "Auto Convert"
+
+### Queue Workflow
+1. Click **Queue: Add Files** to add one or more source files
+2. (Optional) Right-click a queue row to adjust per-item settings
+3. Click **Process Queue** to run queued conversions
+4. Use **Queue Pause/Stop** to halt after the current item
+5. Use **Queue Clear Completed** to remove finished items from the list
 
 ### Setting Loop Points
 1. Click in the waveform to set start point
@@ -60,21 +72,6 @@ A Windows utility designed to convert WAV/MP3 files for optimal use with Amiga c
 ### AudioFX
 1. Pick any AudioFX one sample is loaded or recorded.
 2. Click Convert Current or set loop points to save sample/section with effects
-
-### Future AudioFX Ideas (for next release)
-- **Bitcrusher / downsample:** Lo-fi grit control with variable sample-rate reduction and quantization depth.
-- **Distortion / overdrive:** Soft-clip and hard-clip options for drums, basses, and aggressive leads.
-- **Chorus / ensemble:** Slight delayed detuned copies to thicken single-cycle and sustained samples.
-- **Flanger / phaser:** Swept comb/notch movement for classic retro movement sounds.
-- **Tremolo / auto-pan (mono tremolo mode):** Rhythmic amplitude modulation for pulse-like textures.
-- **Compressor / limiter:** Simple dynamics control to make converted 8-bit samples punchier and more consistent.
-- **Noise gate / denoise:** Remove low-level hiss or room noise from recordings before conversion.
-- **Transient shaper:** Emphasize attack on drums/percussion so they cut through in tracker mixes.
-- **Band-pass “telephone” EQ:** Useful for voice and FX coloration with minimal CPU-heavy processing.
-- **Reverse + fade-in/out helpers:** Quick one-click sample design tools for transitions and impacts.
-- **ADSR-style volume envelope apply:** Bake attack/decay/release directly into one-shot samples.
-- **Stereo-to-mono blend modes:** Mid/side-inspired collapse choices to reduce phase cancellation when importing stereo material.
-
 
 ### Keyboard Shortcuts
 - `Ctrl+Z`: Undo
@@ -104,6 +101,14 @@ MIT License
 - ProTracker documentation for frequency tables
 
 ## Version History
+### v1.5
+- Added tracker-style Piano Mode with keyboard and mouse note input.
+- Added new AudioFX options: chorus, overdrive, reverse, fades, band-pass, and noise gate.
+- Improved loop-point workflow with drag-selection and better selection persistence across edits/resampling.
+- Improved ProTracker note workflow by syncing and locking sample-rate selection.
+- Added a "Save Sample" waveform toolbar button and improved toolbar behavior on narrow windows.
+- Added and refined the built-in conversion queue workflow for batch processing.
+
 ### v1.4
 - Workflow bugs should now be resolved.
 
