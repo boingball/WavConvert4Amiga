@@ -1200,8 +1200,11 @@ namespace WavConvert4Amiga
             // Create a flow layout panel for all buttons at the top
             FlowLayoutPanel controlPanel = new FlowLayoutPanel();
             controlPanel.Dock = DockStyle.Top;
-            controlPanel.Height = 35; // Increased height for buttons
             controlPanel.Padding = new Padding(5);
+            controlPanel.WrapContents = true;
+            controlPanel.AutoSize = true;
+            controlPanel.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            controlPanel.Margin = new Padding(0);
             panelWaveform.Controls.Add(controlPanel);
             InitializeEditButtons(controlPanel);
 
@@ -1241,6 +1244,12 @@ namespace WavConvert4Amiga
             btnSaveLoop.Size = buttonSize;
             btnSaveLoop.Click += BtnSaveLoop_Click;
             controlPanel.Controls.Add(btnSaveLoop);
+
+            Button btnSaveSample = new RetroButton();
+            btnSaveSample.Text = "Save Sample";
+            btnSaveSample.Size = buttonSize;
+            btnSaveSample.Click += BtnSaveSample_Click;
+            controlPanel.Controls.Add(btnSaveSample);
 
             // Add Preview button
             btnPreviewLoop = new RetroButton();
@@ -4673,6 +4682,82 @@ namespace WavConvert4Amiga
                 {
                     MessageBox.Show($"Error saving file: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
+            }
+        }
+
+        private void BtnSaveSample_Click(object sender, EventArgs e)
+        {
+            if (currentPcmData == null || currentPcmData.Length == 0)
+            {
+                MessageBox.Show("No waveform data available to save.", "No Audio Data", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            SaveFileDialog saveDialog = new SaveFileDialog();
+            saveDialog.Filter = "WAV files (*.wav)|*.wav|8SVX files (*.8svx)|*.8svx|All files (*.*)|*.*";
+            saveDialog.FilterIndex = 1;
+
+            if (!string.IsNullOrEmpty(lastLoadedFilePath))
+            {
+                saveDialog.InitialDirectory = Path.GetDirectoryName(lastLoadedFilePath);
+                saveDialog.FileName = Path.GetFileNameWithoutExtension(lastLoadedFilePath) + "_edited.wav";
+            }
+            else
+            {
+                saveDialog.FileName = "edited_sample.wav";
+            }
+
+            if (saveDialog.ShowDialog() != DialogResult.OK)
+            {
+                return;
+            }
+
+            try
+            {
+                int sampleRate = waveformViewer?.CurrentSampleRate ?? GetSelectedSampleRate();
+                string extension = Path.GetExtension(saveDialog.FileName).ToLowerInvariant();
+
+                if (extension == ".8svx")
+                {
+                    SaveAs8SVX(currentPcmData, saveDialog.FileName, sampleRate);
+                    AddToListBox($"Saved current sample as 8SVX: {Path.GetFileName(saveDialog.FileName)}");
+                }
+                else
+                {
+                    bool use16Bit = checkBox16BitWAV.Checked;
+                    if (use16Bit)
+                    {
+                        var format = new WaveFormat(sampleRate, 16, 1);
+                        using (var writer = new WaveFileWriter(saveDialog.FileName, format))
+                        {
+                            short[] samples16Bit = new short[currentPcmData.Length];
+                            for (int i = 0; i < currentPcmData.Length; i++)
+                            {
+                                samples16Bit[i] = (short)((currentPcmData[i] - 128) * 256);
+                            }
+
+                            byte[] buffer = new byte[samples16Bit.Length * 2];
+                            Buffer.BlockCopy(samples16Bit, 0, buffer, 0, buffer.Length);
+                            writer.Write(buffer, 0, buffer.Length);
+                        }
+                        AddToListBox($"Saved current sample as 16-bit WAV: {Path.GetFileName(saveDialog.FileName)}");
+                    }
+                    else
+                    {
+                        var format = new WaveFormat(sampleRate, 8, 1);
+                        using (var writer = new WaveFileWriter(saveDialog.FileName, format))
+                        {
+                            writer.Write(currentPcmData, 0, currentPcmData.Length);
+                        }
+                        AddToListBox($"Saved current sample as 8-bit WAV: {Path.GetFileName(saveDialog.FileName)}");
+                    }
+                }
+
+                MessageBox.Show("Current sample saved successfully.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error saving current sample: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
