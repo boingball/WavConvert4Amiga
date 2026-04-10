@@ -7,6 +7,12 @@ namespace WavConvert4Amiga
 {
     public class AudioEffectsProcessor
     {
+        private enum ChipWaveType
+        {
+            Pulse,
+            Triangle,
+            Saw
+        }
 
         private Action<string> setCursorCallback;
 
@@ -334,6 +340,142 @@ namespace WavConvert4Amiga
                 SetNormalCursor();
             }
         }
+
+        public byte[] ApplyChipifyMonoEffect(byte[] input, int sampleRate)
+        {
+            try
+            {
+                SetBusyCursor();
+                if (input == null || input.Length < 8)
+                {
+                    return input ?? Array.Empty<byte>();
+                }
+
+                float[] source = BytesToFloats(input);
+                float[] output = new float[source.Length];
+
+                float baseFrequency = EstimateFundamentalFrequency(source, sampleRate, 0, source.Length);
+                if (baseFrequency <= 0)
+                {
+                    baseFrequency = 220.0f;
+                }
+
+                baseFrequency = QuantizeFrequencyToSemitone(baseFrequency);
+
+                float env = 0f;
+                float attack = 0.18f;
+                float release = 0.996f;
+                float phase = 0f;
+                float increment = baseFrequency / Math.Max(1, sampleRate);
+
+                for (int i = 0; i < source.Length; i++)
+                {
+                    float abs = Math.Abs(source[i]);
+                    if (abs > env)
+                    {
+                        env = env + (abs - env) * attack;
+                    }
+                    else
+                    {
+                        env *= release;
+                    }
+
+                    phase += increment;
+                    if (phase >= 1f) phase -= 1f;
+
+                    float pulse = phase < 0.42f ? 1f : -1f;
+                    float tri = 1f - (4f * Math.Abs(phase - 0.5f));
+                    float mixed = (pulse * 0.75f) + (tri * 0.25f);
+
+                    output[i] = mixed * env * 0.95f;
+                }
+
+                return ConvertToBytes(output, 1.0f);
+            }
+            finally
+            {
+                SetNormalCursor();
+            }
+        }
+
+        public byte[] ApplyChipifyDeluxeEffect(byte[] input, int sampleRate)
+        {
+            try
+            {
+                SetBusyCursor();
+                if (input == null || input.Length < 8)
+                {
+                    return input ?? Array.Empty<byte>();
+                }
+
+                float[] source = BytesToFloats(input);
+                float[] output = new float[source.Length];
+
+                int frameSize = Math.Max(128, sampleRate / 50); // ~20ms
+                int hopSize = Math.Max(64, frameSize / 2);
+
+                float globalEnvelope = 0f;
+                float attack = 0.25f;
+                float release = 0.995f;
+                float phase = 0f;
+                float smoothedFreq = 220f;
+
+                for (int frameStart = 0; frameStart < source.Length; frameStart += hopSize)
+                {
+                    int frameEnd = Math.Min(source.Length, frameStart + frameSize);
+                    int frameLen = frameEnd - frameStart;
+                    if (frameLen < 32) break;
+
+                    float detected = EstimateFundamentalFrequency(source, sampleRate, frameStart, frameLen);
+                    float zcr = EstimateZeroCrossingRate(source, frameStart, frameLen);
+
+                    bool voiced = detected > 0 && zcr < 0.45f;
+                    if (voiced)
+                    {
+                        detected = QuantizeFrequencyToSemitone(detected);
+                        smoothedFreq = (smoothedFreq * 0.7f) + (detected * 0.3f);
+                    }
+
+                    ChipWaveType wave = SelectChipWaveType(zcr, voiced);
+                    float frameIncrement = smoothedFreq / Math.Max(1, sampleRate);
+
+                    int synthEnd = Math.Min(source.Length, frameStart + hopSize);
+                    for (int i = frameStart; i < synthEnd; i++)
+                    {
+                        float abs = Math.Abs(source[i]);
+                        if (abs > globalEnvelope)
+                        {
+                            globalEnvelope = globalEnvelope + (abs - globalEnvelope) * attack;
+                        }
+                        else
+                        {
+                            globalEnvelope *= release;
+                        }
+
+                        float sample;
+                        if (!voiced)
+                        {
+                            sample = (((i * 1103515245) + 12345) & 0x7fff) / 16384.0f - 1.0f;
+                            sample *= 0.5f;
+                        }
+                        else
+                        {
+                            phase += frameIncrement;
+                            if (phase >= 1f) phase -= 1f;
+                            sample = GenerateChipSample(wave, phase);
+                        }
+
+                        output[i] = sample * globalEnvelope * 0.95f;
+                    }
+                }
+
+                return ConvertToBytes(output, 1.0f);
+            }
+            finally
+            {
+                SetNormalCursor();
+            }
+        }
         private static readonly int[] vocalFreqs = { 200, 400, 800, 1600, 2400, 3200 }; // Key vocal frequencies
 
         // Apply vocal removal effect (using frequency-based approach for mono)
@@ -460,6 +602,139 @@ namespace WavConvert4Amiga
                 output[i] = (byte)Math.Max(0, Math.Min(255, (sample * 128.0f) + 128));
             }
             return output;
+        }
+
+        private float[] BytesToFloats(byte[] input)
+        {
+            float[] output = new float[input.Length];
+            for (int i = 0; i < input.Length; i++)
+            {
+                output[i] = (input[i] - 128) / 128.0f;
+            }
+            return output;
+        }
+
+        private float EstimateFundamentalFrequency(float[] source, int sampleRate, int start, int length)
+        {
+            if (length <= 0 || sampleRate <= 0)
+            {
+                return 0f;
+            }
+
+            int minLag = Math.Max(1, sampleRate / 1400); // ~1400 Hz
+            int maxLag = Math.Min(length - 2, sampleRate / 70); // ~70 Hz
+            if (maxLag <= minLag)
+            {
+                return 0f;
+            }
+
+            float best = 0f;
+            int bestLag = 0;
+
+            for (int lag = minLag; lag <= maxLag; lag++)
+            {
+                float corr = 0f;
+                float normA = 0f;
+                float normB = 0f;
+                int end = start + length - lag;
+
+                for (int i = start; i < end; i++)
+                {
+                    float a = source[i];
+                    float b = source[i + lag];
+                    corr += a * b;
+                    normA += a * a;
+                    normB += b * b;
+                }
+
+                if (normA <= 1e-7f || normB <= 1e-7f)
+                {
+                    continue;
+                }
+
+                float normalized = (float)(corr / Math.Sqrt(normA * normB));
+                if (normalized > best)
+                {
+                    best = normalized;
+                    bestLag = lag;
+                }
+            }
+
+            if (bestLag == 0 || best < 0.25f)
+            {
+                return 0f;
+            }
+
+            return (float)sampleRate / bestLag;
+        }
+
+        private float QuantizeFrequencyToSemitone(float frequency)
+        {
+            if (frequency <= 0f)
+            {
+                return 0f;
+            }
+
+            float midi = 69f + (12f * (float)(Math.Log(frequency / 440.0f, 2)));
+            float quantizedMidi = (float)Math.Round(midi);
+            float quantized = 440f * (float)Math.Pow(2, (quantizedMidi - 69f) / 12f);
+            return Math.Max(55f, Math.Min(1760f, quantized));
+        }
+
+        private float EstimateZeroCrossingRate(float[] source, int start, int length)
+        {
+            if (length <= 1)
+            {
+                return 0f;
+            }
+
+            int crosses = 0;
+            int end = start + length;
+            for (int i = start + 1; i < end; i++)
+            {
+                bool prevNeg = source[i - 1] < 0f;
+                bool currNeg = source[i] < 0f;
+                if (prevNeg != currNeg)
+                {
+                    crosses++;
+                }
+            }
+
+            return (float)crosses / (length - 1);
+        }
+
+        private ChipWaveType SelectChipWaveType(float zeroCrossingRate, bool voiced)
+        {
+            if (!voiced)
+            {
+                return ChipWaveType.Pulse;
+            }
+
+            if (zeroCrossingRate < 0.10f)
+            {
+                return ChipWaveType.Triangle;
+            }
+
+            if (zeroCrossingRate < 0.22f)
+            {
+                return ChipWaveType.Pulse;
+            }
+
+            return ChipWaveType.Saw;
+        }
+
+        private float GenerateChipSample(ChipWaveType wave, float phase)
+        {
+            switch (wave)
+            {
+                case ChipWaveType.Triangle:
+                    return 1f - (4f * Math.Abs(phase - 0.5f));
+                case ChipWaveType.Saw:
+                    return (2f * phase) - 1f;
+                case ChipWaveType.Pulse:
+                default:
+                    return phase < 0.35f ? 1f : -1f;
+            }
         }
     }
 }

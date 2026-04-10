@@ -1300,6 +1300,12 @@ namespace WavConvert4Amiga
                             case "noisegate":
                                 result = audioEffects.ApplyNoiseGate(result, 0.04f, 0.992f);
                                 break;
+                            case "chipify_mono":
+                                result = audioEffects.ApplyChipifyMonoEffect(result, targetSampleRate);
+                                break;
+                            case "chipify_deluxe":
+                                result = audioEffects.ApplyChipifyDeluxeEffect(result, targetSampleRate);
+                                break;
                         }
                     }
                 }
@@ -2220,6 +2226,8 @@ namespace WavConvert4Amiga
                 ("Fade Out", ApplyFadeOutEffect),
                 ("Telephone BP", ApplyTelephoneBandPassEffect),
                 ("AM Radio BP", ApplyAmRadioBandPassEffect),
+                ("Chipify Mono", ApplyChipifyMonoEffect),
+                ("Chipify Deluxe", ApplyChipifyDeluxeEffect),
                 ("Reset", ResetEffects)
             };
 
@@ -2382,6 +2390,12 @@ namespace WavConvert4Amiga
                     case "noisegate":
                         currentPcmData = audioEffects.ApplyNoiseGate(currentPcmData, 0.04f, 0.992f);
                         break;
+                    case "chipify_mono":
+                        currentPcmData = audioEffects.ApplyChipifyMonoEffect(currentPcmData, targetSampleRate);
+                        break;
+                    case "chipify_deluxe":
+                        currentPcmData = audioEffects.ApplyChipifyDeluxeEffect(currentPcmData, targetSampleRate);
+                        break;
                 }
 
                 waveformViewer.SetAudioData(currentPcmData);
@@ -2502,6 +2516,16 @@ namespace WavConvert4Amiga
         private void ApplyNoiseGateEffect(object sender, EventArgs e)
         {
             ApplyTrackedEffect("noisegate", () => audioEffects.ApplyNoiseGate(currentPcmData, 0.04f, 0.992f));
+        }
+
+        private void ApplyChipifyMonoEffect(object sender, EventArgs e)
+        {
+            ApplyTrackedEffect("chipify_mono", () => audioEffects.ApplyChipifyMonoEffect(currentPcmData, GetSelectedSampleRate()));
+        }
+
+        private void ApplyChipifyDeluxeEffect(object sender, EventArgs e)
+        {
+            ApplyTrackedEffect("chipify_deluxe", () => audioEffects.ApplyChipifyDeluxeEffect(currentPcmData, GetSelectedSampleRate()));
         }
 
         private byte[] ApplySelectionEffect(Func<byte[], byte[]> effectFunction, string effectLabel)
@@ -2799,6 +2823,12 @@ namespace WavConvert4Amiga
                             break;
                         case "noisegate":
                             result = audioEffects.ApplyNoiseGate(result, 0.04f, 0.992f);
+                            break;
+                        case "chipify_mono":
+                            result = audioEffects.ApplyChipifyMonoEffect(result, targetSampleRate);
+                            break;
+                        case "chipify_deluxe":
+                            result = audioEffects.ApplyChipifyDeluxeEffect(result, targetSampleRate);
                             break;
                     }
                 }

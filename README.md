@@ -10,6 +10,8 @@ A Windows utility designed to convert WAV/MP3 files for optimal use with Amiga c
 - Load MP3 files and decode them into the same editable workflow as WAV files
 - Support for both PAL and NTSC frequencies
 - ProTracker note frequency conversion (C-1 to B-3)
+- Chipify Mono effect (single-note chip-style resynthesis with envelope following)
+- Chipify Deluxe effect (frame pitch-tracking with chip wave selection and resynthesis)
 - Built-in low-pass filter option
 - Adjustable amplification control
 - 8SVX file format support
