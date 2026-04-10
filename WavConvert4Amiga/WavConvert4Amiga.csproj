@@ -159,6 +159,7 @@
     <Compile Include="RetroButton.cs">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Include="SamplePadForm.cs" />
     <Compile Include="WaveformProcessor.cs" />
     <Compile Include="WaveformViewer.code.cs.cs">
       <SubType>UserControl</SubType>
