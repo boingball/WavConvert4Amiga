@@ -1200,8 +1200,11 @@ namespace WavConvert4Amiga
             // Create a flow layout panel for all buttons at the top
             FlowLayoutPanel controlPanel = new FlowLayoutPanel();
             controlPanel.Dock = DockStyle.Top;
-            controlPanel.Height = 35; // Increased height for buttons
             controlPanel.Padding = new Padding(5);
+            controlPanel.WrapContents = true;
+            controlPanel.AutoSize = true;
+            controlPanel.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            controlPanel.Margin = new Padding(0);
             panelWaveform.Controls.Add(controlPanel);
             InitializeEditButtons(controlPanel);
 
