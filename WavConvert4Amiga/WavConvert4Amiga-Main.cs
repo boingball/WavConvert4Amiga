@@ -114,9 +114,13 @@ namespace WavConvert4Amiga
         private WaveOutEvent pianoWaveOut;
         private MemoryStream pianoAudioStream;
         private RawSourceWaveStream pianoWaveStream;
-        private WaveOutEvent padWaveOut;
-        private MemoryStream padAudioStream;
-        private RawSourceWaveStream padWaveStream;
+        private sealed class PadPlaybackVoice
+        {
+            public WaveOutEvent Output;
+            public MemoryStream AudioStream;
+            public RawSourceWaveStream WaveStream;
+        }
+        private readonly List<PadPlaybackVoice> activePadVoices = new List<PadPlaybackVoice>();
         private readonly PadSlotInfo[] padSlots = Enumerable.Range(0, 16).Select(_ => new PadSlotInfo()).ToArray();
         private SamplePadForm samplePadForm;
 
@@ -386,6 +390,16 @@ namespace WavConvert4Amiga
                 placeRight(checkBoxLowPass, row1Y + 3);
                 placeRight(checkBoxEnable8SVX, row1Y + 3);
                 placeRight(checkBox16BitWAV, row1Y + 3);
+                placeRight(checkBoxShowPad, row1Y + 3);
+
+                int leftClusterRight = checkBoxPianoMode != null ? checkBoxPianoMode.Right : checkBoxNTSC.Right;
+                if (checkBoxShowPad != null && checkBoxShowPad.Left < leftClusterRight + gap)
+                {
+                    int width = checkBoxShowPad.PreferredSize.Width;
+                    checkBoxShowPad.Location = new Point(
+                        Math.Max(margin, ClientSize.Width - margin - width),
+                        row2Y + 5);
+                }
 
                 const int queueButtonHeight = 30;
                 const int queueButtonCount = 5;
@@ -1026,30 +1040,56 @@ namespace WavConvert4Amiga
             {
                 lock (playbackLock)
                 {
-                    padWaveOut?.Stop();
-                    padWaveOut?.Dispose();
-                    padWaveOut = new WaveOutEvent
+                    var voice = new PadPlaybackVoice
                     {
-                        DesiredLatency = 90,
-                        NumberOfBuffers = 3
+                        Output = new WaveOutEvent
+                        {
+                            DesiredLatency = 90,
+                            NumberOfBuffers = 3
+                        }
                     };
 
-                    padWaveStream?.Dispose();
-                    padWaveStream = null;
+                    voice.AudioStream = new MemoryStream(slotInfo.AudioData, false);
+                    voice.WaveStream = new RawSourceWaveStream(voice.AudioStream, new WaveFormat(slotInfo.SampleRate, 8, 1));
+                    voice.Output.Init(voice.WaveStream);
+                    voice.Output.PlaybackStopped += (s, e) =>
+                    {
+                        lock (playbackLock)
+                        {
+                            activePadVoices.Remove(voice);
+                        }
+                        voice.Output.Dispose();
+                        voice.WaveStream.Dispose();
+                        voice.AudioStream.Dispose();
+                    };
 
-                    padAudioStream?.Dispose();
-                    padAudioStream = null;
+                    activePadVoices.Add(voice);
+                    if (activePadVoices.Count > 24)
+                    {
+                        StopAndDisposePadVoice(activePadVoices[0]);
+                        activePadVoices.RemoveAt(0);
+                    }
 
-                    padAudioStream = new MemoryStream(slotInfo.AudioData, false);
-                    padWaveStream = new RawSourceWaveStream(padAudioStream, new WaveFormat(slotInfo.SampleRate, 8, 1));
-                    padWaveOut.Init(padWaveStream);
-                    padWaveOut.Play();
+                    voice.Output.Play();
                 }
             }
             catch
             {
                 // keep pad playback resilient without interrupting editing workflow
             }
+        }
+
+        private void StopAndDisposePadVoice(PadPlaybackVoice voice)
+        {
+            if (voice == null)
+            {
+                return;
+            }
+
+            try { voice.Output?.Stop(); } catch { }
+            try { voice.Output?.Dispose(); } catch { }
+            try { voice.WaveStream?.Dispose(); } catch { }
+            try { voice.AudioStream?.Dispose(); } catch { }
         }
 
         private void EditPadSlotInMain(int slot)
@@ -1396,41 +1436,42 @@ namespace WavConvert4Amiga
             // Create a flow layout panel for all buttons at the top
             FlowLayoutPanel controlPanel = new FlowLayoutPanel();
             controlPanel.Dock = DockStyle.Top;
-            controlPanel.Padding = new Padding(5);
-            controlPanel.WrapContents = true;
-            controlPanel.AutoSize = true;
-            controlPanel.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            controlPanel.Padding = new Padding(3);
+            controlPanel.WrapContents = false;
+            controlPanel.AutoSize = false;
+            controlPanel.AutoScroll = true;
+            controlPanel.Height = 30;
             controlPanel.Margin = new Padding(0);
             panelWaveform.Controls.Add(controlPanel);
             InitializeEditButtons(controlPanel);
 
             // Common button size
-            Size buttonSize = new Size(100, 25);
+            Size buttonSize = new Size(86, 22);
 
             // Add Clear Button
             Button btnClearWaveform = new RetroButton();
             btnClearWaveform.Text = "Clear";
-            btnClearWaveform.Size = new Size(100, 25);
+            btnClearWaveform.Size = buttonSize;
             btnClearWaveform.Click += BtnClearWaveform_Click;
             controlPanel.Controls.Add(btnClearWaveform);
 
             //Zoom Buttons
             btnZoomIn = new RetroButton();
             btnZoomIn.Text = "Zoom In";
-            btnZoomIn.Size = new Size(100, 25);
+            btnZoomIn.Size = buttonSize;
             btnZoomIn.Click += BtnZoomIn_Click;
             controlPanel.Controls.Add(btnZoomIn);
 
             btnZoomOut = new RetroButton();
             btnZoomOut.Text = "Zoom Out";
-            btnZoomOut.Size = new Size(100, 25);
+            btnZoomOut.Size = buttonSize;
             btnZoomOut.Click += BtnZoomOut_Click;
             controlPanel.Controls.Add(btnZoomOut);
 
             // Add Save Loop Points (8SVX) button
             Button btnSaveLoop8SVX = new RetroButton();
             btnSaveLoop8SVX.Text = "Save Loop Points (8SVX)";
-            btnSaveLoop8SVX.Size = new Size(160, 25); // Wider for longer text
+            btnSaveLoop8SVX.Size = new Size(170, 22); // Wider for longer text
             btnSaveLoop8SVX.Click += BtnSaveLoop8SVX_Click;
             controlPanel.Controls.Add(btnSaveLoop8SVX);
 
@@ -2543,10 +2584,11 @@ namespace WavConvert4Amiga
 
         private void InitializeEditButtons(FlowLayoutPanel controlPanel)
         {
+            Size editButtonSize = new Size(86, 22);
             // Cut button
             btnCut = new RetroButton();
             btnCut.Text = "Cut";
-            btnCut.Size = new Size(100, 25);
+            btnCut.Size = editButtonSize;
             btnCut.Click += BtnCut_Click;
             btnCut.Enabled = false; // Disabled until loop points are set
             controlPanel.Controls.Add(btnCut);
@@ -2554,7 +2596,7 @@ namespace WavConvert4Amiga
             // Crop-to-loop button (reverse cut)
             btnCropToLoop = new RetroButton();
             btnCropToLoop.Text = "Crop to Loop";
-            btnCropToLoop.Size = new Size(100, 25);
+            btnCropToLoop.Size = new Size(110, 22);
             btnCropToLoop.Click += BtnCropToLoop_Click;
             btnCropToLoop.Enabled = false; // Disabled until loop points are set
             controlPanel.Controls.Add(btnCropToLoop);
@@ -2562,7 +2604,7 @@ namespace WavConvert4Amiga
             // Undo button
             btnUndo = new RetroButton();
             btnUndo.Text = "Undo";
-            btnUndo.Size = new Size(100, 25);
+            btnUndo.Size = editButtonSize;
             btnUndo.Click += BtnUndo_Click;
             btnUndo.Enabled = false;
             controlPanel.Controls.Add(btnUndo);
@@ -2570,7 +2612,7 @@ namespace WavConvert4Amiga
             // Redo button
             btnRedo = new RetroButton();
             btnRedo.Text = "Redo";
-            btnRedo.Size = new Size(100, 25);
+            btnRedo.Size = editButtonSize;
             btnRedo.Click += BtnRedo_Click;
             btnRedo.Enabled = false;
             controlPanel.Controls.Add(btnRedo);
@@ -5007,10 +5049,14 @@ namespace WavConvert4Amiga
             pianoWaveOut?.Dispose();
             pianoWaveStream?.Dispose();
             pianoAudioStream?.Dispose();
-            padWaveOut?.Stop();
-            padWaveOut?.Dispose();
-            padWaveStream?.Dispose();
-            padAudioStream?.Dispose();
+            lock (playbackLock)
+            {
+                foreach (var voice in activePadVoices.ToList())
+                {
+                    StopAndDisposePadVoice(voice);
+                }
+                activePadVoices.Clear();
+            }
             padAssignContextMenu?.Dispose();
             samplePadForm?.Close();
         }
