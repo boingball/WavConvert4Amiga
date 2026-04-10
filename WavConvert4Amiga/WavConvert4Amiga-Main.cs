@@ -408,7 +408,7 @@ namespace WavConvert4Amiga
 
                 if (recordingPanel != null)
                 {
-                    recordingPanel.Location = new Point(10, 52);
+                    recordingPanel.Location = new Point(10, 10);
                     recordingPanel.BringToFront();
                 }
 
@@ -1652,8 +1652,8 @@ namespace WavConvert4Amiga
             };
             recordingPanel.Controls.Add(btnStopRecording);
 
-            // Add recording panel as a top overlay so it cannot be hidden by bottom panel content
-            this.Controls.Add(recordingPanel);
+            // Keep recording panel in bottom-left tools area
+            panelBottom.Controls.Add(recordingPanel);
             recordingPanel.BringToFront();
         }
 
