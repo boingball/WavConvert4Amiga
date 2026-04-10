@@ -341,7 +341,7 @@ namespace WavConvert4Amiga
             }
         }
 
-        public byte[] ApplyChipifyMonoEffect(byte[] input, int sampleRate)
+        public byte[] ApplyChipifyMonoEffect(byte[] input, int sampleRate, float quality = 0.65f, float crunch = 0.5f)
         {
             try
             {
@@ -353,7 +353,9 @@ namespace WavConvert4Amiga
 
                 float[] source = BytesToFloats(input);
                 float[] output = new float[source.Length];
-                int analysisFactor = GetAnalysisDownsampleFactor(sampleRate);
+                quality = Clamp01(quality);
+                crunch = Clamp01(crunch);
+                int analysisFactor = GetAnalysisDownsampleFactor(sampleRate, quality);
                 int analysisSampleRate = Math.Max(1, sampleRate / analysisFactor);
                 float[] analysisSource = BuildAnalysisSignal(source, analysisFactor);
 
@@ -421,7 +423,8 @@ namespace WavConvert4Amiga
                     output[i] = (synth * smoothedEnv * 1.25f) + (transient * 0.35f);
                 }
 
-                ApplySampleAndHold(output, Math.Max(1, sampleRate / 12000));
+                int monoHoldRate = (int)(14000 - (crunch * 8000)); // 14k -> 6k
+                ApplySampleAndHold(output, Math.Max(1, sampleRate / Math.Max(3000, monoHoldRate)));
                 return ConvertToBytes(output, 1.0f);
             }
             finally
@@ -430,7 +433,7 @@ namespace WavConvert4Amiga
             }
         }
 
-        public byte[] ApplyChipifyDeluxeEffect(byte[] input, int sampleRate)
+        public byte[] ApplyChipifyDeluxeEffect(byte[] input, int sampleRate, float quality = 0.65f, float crunch = 0.5f)
         {
             try
             {
@@ -442,7 +445,9 @@ namespace WavConvert4Amiga
 
                 float[] source = BytesToFloats(input);
                 float[] output = new float[source.Length];
-                int analysisFactor = GetAnalysisDownsampleFactor(sampleRate);
+                quality = Clamp01(quality);
+                crunch = Clamp01(crunch);
+                int analysisFactor = GetAnalysisDownsampleFactor(sampleRate, quality);
                 int analysisSampleRate = Math.Max(1, sampleRate / analysisFactor);
                 float[] analysisSource = BuildAnalysisSignal(source, analysisFactor);
 
@@ -547,7 +552,8 @@ namespace WavConvert4Amiga
                     output[i] = synth + noise + dryBlend;
                 }
 
-                ApplySampleAndHold(output, Math.Max(1, sampleRate / 10000));
+                int deluxeHoldRate = (int)(13000 - (crunch * 7500)); // 13k -> 5.5k
+                ApplySampleAndHold(output, Math.Max(1, sampleRate / Math.Max(3000, deluxeHoldRate)));
                 return ConvertToBytes(output, 1.0f);
             }
             finally
@@ -777,9 +783,15 @@ namespace WavConvert4Amiga
             return a + ((b - a) * Math.Max(0f, Math.Min(1f, t)));
         }
 
-        private int GetAnalysisDownsampleFactor(int sampleRate)
+        private float Clamp01(float value)
         {
-            int targetRate = 11025;
+            return Math.Max(0f, Math.Min(1f, value));
+        }
+
+        private int GetAnalysisDownsampleFactor(int sampleRate, float quality)
+        {
+            quality = Clamp01(quality);
+            int targetRate = (int)(7000 + (quality * 10000)); // 7k..17k
             int factor = Math.Max(1, sampleRate / targetRate);
             return Math.Min(8, factor);
         }
