@@ -408,7 +408,8 @@ namespace WavConvert4Amiga
 
                 if (recordingPanel != null)
                 {
-                    recordingPanel.Location = new Point(10, 10);
+                    recordingPanel.Location = new Point(10, 52);
+                    recordingPanel.BringToFront();
                 }
 
                 if (effectsPanel != null)
@@ -421,6 +422,8 @@ namespace WavConvert4Amiga
                     int effectsLeft = effectsPanel != null ? effectsPanel.Left : panelBottom.Width - 10;
                     fadePanel.Location = new Point(Math.Max(10, effectsLeft - fadePanel.Width - 10), 10);
                 }
+
+                recordingIndicator?.BringToFront();
             }
             finally
             {
@@ -1427,9 +1430,10 @@ namespace WavConvert4Amiga
             // Create a panel for the recording controls
             recordingPanel = new Panel
             {
-                Location = new Point(10, 10),
+                Location = new Point(10, 52),
                 Size = new Size(325, 160),
-                BackColor = Color.FromArgb(180, 190, 210)
+                BackColor = Color.FromArgb(180, 190, 210),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left
             };
             AddBevelToPanel(recordingPanel);
 
@@ -1460,6 +1464,8 @@ namespace WavConvert4Amiga
                     recordingIndicator.RecordingType = "system";
                     recordingIndicator.Visible = true;
                     recordingIndicator.StartBlinking();
+                    recordingPanel.BringToFront();
+                    recordingIndicator.BringToFront();
                 }
                 catch (Exception ex)
                 {
@@ -1563,6 +1569,8 @@ namespace WavConvert4Amiga
                     recordingIndicator.RecordingType = "microphone";
                     recordingIndicator.Visible = true;
                     recordingIndicator.StartBlinking();
+                    recordingPanel.BringToFront();
+                    recordingIndicator.BringToFront();
                 }
                 catch (Exception ex)
                 {
@@ -1644,8 +1652,9 @@ namespace WavConvert4Amiga
             };
             recordingPanel.Controls.Add(btnStopRecording);
 
-            // Add the recording panel to the bottom panel
-            panelBottom.Controls.Add(recordingPanel);
+            // Add recording panel as a top overlay so it cannot be hidden by bottom panel content
+            this.Controls.Add(recordingPanel);
+            recordingPanel.BringToFront();
         }
 
         // Add this helper method to refresh the microphone list
@@ -2252,8 +2261,8 @@ namespace WavConvert4Amiga
             // Envelope/utility panel
             fadePanel = new Panel
             {
-                Location = new Point(Math.Max(10, effectsPanel.Left - 200), 10),
-                Size = new Size(190, 195),
+                Location = new Point(Math.Max(10, effectsPanel.Left - 260), 10),
+                Size = new Size(250, 195),
                 BackColor = Color.FromArgb(180, 190, 210)
             };
             AddBevelToPanel(fadePanel);
@@ -2293,7 +2302,7 @@ namespace WavConvert4Amiga
             Label labelChipTweaks = new Label
             {
                 Text = "Chipify Tweak",
-                Location = new Point(8, 118),
+                Location = new Point(156, 30),
                 AutoSize = true,
                 ForeColor = Color.FromArgb(235, 235, 235)
             };
@@ -2302,7 +2311,7 @@ namespace WavConvert4Amiga
             Label labelChipQuality = new Label
             {
                 Text = "Quality",
-                Location = new Point(8, 138),
+                Location = new Point(156, 52),
                 AutoSize = true,
                 ForeColor = Color.FromArgb(235, 235, 235)
             };
@@ -2314,8 +2323,9 @@ namespace WavConvert4Amiga
                 Maximum = 100,
                 TickFrequency = 10,
                 Value = 65,
-                Size = new Size(120, 24),
-                Location = new Point(56, 132)
+                TickStyle = TickStyle.None,
+                Size = new Size(86, 24),
+                Location = new Point(156, 66)
             };
             trackBarChipQuality.Scroll += (s, e) => UpdateChipifyKnobLabels();
             fadePanel.Controls.Add(trackBarChipQuality);
@@ -2323,7 +2333,7 @@ namespace WavConvert4Amiga
             labelChipQualityValue = new Label
             {
                 Text = "65",
-                Location = new Point(158, 138),
+                Location = new Point(220, 52),
                 AutoSize = true,
                 ForeColor = Color.FromArgb(235, 235, 235)
             };
@@ -2332,7 +2342,7 @@ namespace WavConvert4Amiga
             Label labelChipCrunch = new Label
             {
                 Text = "Crunch",
-                Location = new Point(8, 164),
+                Location = new Point(156, 98),
                 AutoSize = true,
                 ForeColor = Color.FromArgb(235, 235, 235)
             };
@@ -2344,8 +2354,9 @@ namespace WavConvert4Amiga
                 Maximum = 100,
                 TickFrequency = 10,
                 Value = 50,
-                Size = new Size(120, 24),
-                Location = new Point(56, 158)
+                TickStyle = TickStyle.None,
+                Size = new Size(86, 24),
+                Location = new Point(156, 112)
             };
             trackBarChipCrunch.Scroll += (s, e) => UpdateChipifyKnobLabels();
             fadePanel.Controls.Add(trackBarChipCrunch);
@@ -2353,7 +2364,7 @@ namespace WavConvert4Amiga
             labelChipCrunchValue = new Label
             {
                 Text = "50",
-                Location = new Point(158, 164),
+                Location = new Point(220, 98),
                 AutoSize = true,
                 ForeColor = Color.FromArgb(235, 235, 235)
             };
