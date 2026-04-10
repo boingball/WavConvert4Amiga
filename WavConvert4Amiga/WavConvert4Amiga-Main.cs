@@ -99,7 +99,10 @@ namespace WavConvert4Amiga
         private bool suppressSampleRateChangeEvents = false;
         private (double startSeconds, double endSeconds)? cropSelectionSeconds = null;
         private CheckBox checkBoxPianoMode;
+        private CheckBox checkBoxShowPad;
         private Panel pianoPanel;
+        private Button btnPadAssign;
+        private ContextMenuStrip padAssignContextMenu;
         private readonly Dictionary<Keys, int> pianoKeyOffsets = new Dictionary<Keys, int>
         {
             { Keys.Z, 0 }, { Keys.S, 1 }, { Keys.X, 2 }, { Keys.D, 3 }, { Keys.C, 4 }, { Keys.V, 5 },
@@ -111,6 +114,11 @@ namespace WavConvert4Amiga
         private WaveOutEvent pianoWaveOut;
         private MemoryStream pianoAudioStream;
         private RawSourceWaveStream pianoWaveStream;
+        private WaveOutEvent padWaveOut;
+        private MemoryStream padAudioStream;
+        private RawSourceWaveStream padWaveStream;
+        private readonly PadSlotInfo[] padSlots = Enumerable.Range(0, 16).Select(_ => new PadSlotInfo()).ToArray();
+        private SamplePadForm samplePadForm;
 
 
         private Dictionary<string, (int pal, int ntsc)> ptNoteToHz = new Dictionary<string, (int pal, int ntsc)>()
@@ -357,6 +365,10 @@ namespace WavConvert4Amiga
                 if (checkBoxPianoMode != null)
                 {
                     checkBoxPianoMode.Location = new Point(checkBoxNTSC.Right + 16, row1Y + 3);
+                }
+                if (checkBoxShowPad != null)
+                {
+                    checkBoxShowPad.Location = new Point(checkBoxPianoMode.Right + 16, row1Y + 3);
                 }
 
                 int rightX = ClientSize.Width - margin;
@@ -677,6 +689,13 @@ namespace WavConvert4Amiga
             StyleCheckbox(checkBoxPianoMode);
             checkBoxPianoMode.CheckedChanged += (s, e) => pianoPanel?.Invalidate();
 
+            checkBoxShowPad = new CheckBox();
+            checkBoxShowPad.Text = "Show PAD";
+            checkBoxShowPad.Location = new Point(checkBoxPianoMode.Right + 20, comboBoxPTNote.Top + 2);
+            checkBoxShowPad.AutoSize = true;
+            StyleCheckbox(checkBoxShowPad);
+            checkBoxShowPad.CheckedChanged += CheckBoxShowPad_CheckedChanged;
+
             // Handle selection change
             comboBoxPTNote.SelectedIndexChanged += ComboBoxPTNote_SelectedIndexChanged;
             comboBoxPTNote.KeyDown += ComboBoxPTNote_KeyDown;
@@ -695,6 +714,7 @@ namespace WavConvert4Amiga
             this.Controls.Add(comboBoxPTNote);
             this.Controls.Add(checkBoxNTSC);
             this.Controls.Add(checkBoxPianoMode);
+            this.Controls.Add(checkBoxShowPad);
         }
 
         private void InitializePianoPanel()
@@ -890,6 +910,182 @@ namespace WavConvert4Amiga
                 activePianoOffset = -1;
                 pianoPanel?.Invalidate();
             }
+        }
+
+        private void BtnPadAssign_Click(object sender, EventArgs e)
+        {
+            if (currentPcmData == null || currentPcmData.Length == 0)
+            {
+                MessageBox.Show("Load or record a sample first, then assign it to a PAD slot.", "No Sample Loaded",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            if (padAssignContextMenu == null || padAssignContextMenu.IsDisposed)
+            {
+                padAssignContextMenu = new ContextMenuStrip();
+            }
+
+            padAssignContextMenu.Items.Clear();
+            for (int i = 0; i < 16; i++)
+            {
+                int slot = i;
+                string slotLabel = $"Slot {slot + 1}";
+                if (padSlots[slot].HasData && !string.IsNullOrWhiteSpace(padSlots[slot].Name))
+                {
+                    slotLabel += $" ({padSlots[slot].Name})";
+                }
+
+                var item = new ToolStripMenuItem(slotLabel);
+                item.Click += (s, args) => AssignCurrentSampleToPadSlot(slot);
+                padAssignContextMenu.Items.Add(item);
+            }
+
+            var button = sender as Control;
+            Point menuPoint = button != null
+                ? button.PointToScreen(new Point(0, button.Height))
+                : Cursor.Position;
+            padAssignContextMenu.Show(menuPoint);
+        }
+
+        private void AssignCurrentSampleToPadSlot(int slot)
+        {
+            if (slot < 0 || slot >= padSlots.Length || currentPcmData == null || currentPcmData.Length == 0)
+            {
+                return;
+            }
+
+            byte[] copiedAudio = new byte[currentPcmData.Length];
+            Array.Copy(currentPcmData, copiedAudio, currentPcmData.Length);
+
+            int sampleRate = GetSelectedSampleRate();
+            string sourceName = !string.IsNullOrWhiteSpace(lastLoadedFilePath)
+                ? Path.GetFileNameWithoutExtension(lastLoadedFilePath)
+                : $"Sample {slot + 1}";
+
+            padSlots[slot].AudioData = copiedAudio;
+            padSlots[slot].SampleRate = sampleRate;
+            padSlots[slot].Name = sourceName;
+
+            AddToListBox($"PAD: Assigned current sample to slot {slot + 1} ({sampleRate}Hz).");
+            samplePadForm?.RefreshSlots(padSlots);
+        }
+
+        private void CheckBoxShowPad_CheckedChanged(object sender, EventArgs e)
+        {
+            if (checkBoxShowPad == null)
+            {
+                return;
+            }
+
+            if (checkBoxShowPad.Checked)
+            {
+                EnsureSamplePadWindow();
+                samplePadForm?.Show(this);
+                samplePadForm?.BringToFront();
+            }
+            else
+            {
+                samplePadForm?.Hide();
+            }
+        }
+
+        private void EnsureSamplePadWindow()
+        {
+            if (samplePadForm != null && !samplePadForm.IsDisposed)
+            {
+                samplePadForm.RefreshSlots(padSlots);
+                return;
+            }
+
+            samplePadForm = new SamplePadForm(PlayPadSlot, EditPadSlotInMain);
+            samplePadForm.FormClosed += (s, e) =>
+            {
+                if (checkBoxShowPad != null && !checkBoxShowPad.IsDisposed)
+                {
+                    checkBoxShowPad.Checked = false;
+                }
+            };
+            samplePadForm.RefreshSlots(padSlots);
+        }
+
+        private void PlayPadSlot(int slot)
+        {
+            if (slot < 0 || slot >= padSlots.Length)
+            {
+                return;
+            }
+
+            var slotInfo = padSlots[slot];
+            if (slotInfo == null || !slotInfo.HasData)
+            {
+                return;
+            }
+
+            try
+            {
+                lock (playbackLock)
+                {
+                    padWaveOut?.Stop();
+                    padWaveOut?.Dispose();
+                    padWaveOut = new WaveOutEvent
+                    {
+                        DesiredLatency = 90,
+                        NumberOfBuffers = 3
+                    };
+
+                    padWaveStream?.Dispose();
+                    padWaveStream = null;
+
+                    padAudioStream?.Dispose();
+                    padAudioStream = null;
+
+                    padAudioStream = new MemoryStream(slotInfo.AudioData, false);
+                    padWaveStream = new RawSourceWaveStream(padAudioStream, new WaveFormat(slotInfo.SampleRate, 8, 1));
+                    padWaveOut.Init(padWaveStream);
+                    padWaveOut.Play();
+                }
+            }
+            catch
+            {
+                // keep pad playback resilient without interrupting editing workflow
+            }
+        }
+
+        private void EditPadSlotInMain(int slot)
+        {
+            if (slot < 0 || slot >= padSlots.Length)
+            {
+                return;
+            }
+
+            var slotInfo = padSlots[slot];
+            if (slotInfo == null || !slotInfo.HasData)
+            {
+                MessageBox.Show("That PAD slot is empty.", "PAD", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            StopPreview();
+            ClearAllState();
+
+            currentPcmData = new byte[slotInfo.AudioData.Length];
+            Array.Copy(slotInfo.AudioData, currentPcmData, slotInfo.AudioData.Length);
+
+            originalPcmData = new byte[slotInfo.AudioData.Length];
+            Array.Copy(slotInfo.AudioData, originalPcmData, slotInfo.AudioData.Length);
+
+            originalSampleRate = slotInfo.SampleRate;
+            originalFormat = new WaveFormat(slotInfo.SampleRate, 8, 1);
+            isRecorded = true;
+            lastLoadedFilePath = null;
+
+            SetSampleRateComboTextWithoutProcessing(slotInfo.SampleRate, $"{slotInfo.SampleRate}Hz - PAD Slot {slot + 1}");
+
+            waveformViewer?.SetAudioData(currentPcmData);
+            waveformViewer?.Invalidate();
+            StoreInitialState();
+            AddToListBox($"PAD: Loaded slot {slot + 1} into editor.");
         }
 
         private void ComboBoxPTNote_DrawItem(object sender, DrawItemEventArgs e)
@@ -1257,6 +1453,12 @@ namespace WavConvert4Amiga
             btnPreviewLoop.Size = buttonSize;
             btnPreviewLoop.Click += BtnPreviewLoop_Click;
             controlPanel.Controls.Add(btnPreviewLoop);
+
+            btnPadAssign = new RetroButton();
+            btnPadAssign.Text = "PAD";
+            btnPadAssign.Size = buttonSize;
+            btnPadAssign.Click += BtnPadAssign_Click;
+            controlPanel.Controls.Add(btnPadAssign);
 
             // Initialize the waveform viewer AFTER the control panel
             waveformViewer = new WaveformViewer();
@@ -4805,6 +5007,12 @@ namespace WavConvert4Amiga
             pianoWaveOut?.Dispose();
             pianoWaveStream?.Dispose();
             pianoAudioStream?.Dispose();
+            padWaveOut?.Stop();
+            padWaveOut?.Dispose();
+            padWaveStream?.Dispose();
+            padAudioStream?.Dispose();
+            padAssignContextMenu?.Dispose();
+            samplePadForm?.Close();
         }
 
         private void ApplyAmigaStyle(Control.ControlCollection controls)
