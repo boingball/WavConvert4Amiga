@@ -43,6 +43,7 @@ namespace WavConvert4Amiga
         private Button btnZoomOut;
         private Button btnPreviewLoop;
         private Button btnCut;
+        private Button btnCropToLoop;
         private List<(int start, int end)> cutRegions = new List<(int start, int end)>();
         private Button btnUndo;
         private Button btnRedo;
@@ -1129,6 +1130,49 @@ namespace WavConvert4Amiga
             AddToListBox($"Cut applied. Audio length: {originalLength} → {currentPcmData.Length}. Total cuts: {currentCutRegions.Count}");
         }
 
+        private void BtnCropToLoop_Click(object sender, EventArgs e)
+        {
+            if (currentPcmData == null) return;
+
+            var (start, end) = waveformViewer.GetLoopPoints();
+            if (start < 0 || end < 0 || start >= end || end > currentPcmData.Length)
+            {
+                MessageBox.Show("Please set valid loop points first.", "Invalid Selection",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            int originalLength = currentPcmData.Length;
+
+            PushUndo(currentPcmData);
+            redoStack.Clear();
+
+            byte[] keptData = new byte[end - start];
+            Array.Copy(currentPcmData, start, keptData, 0, end - start);
+            currentPcmData = keptData;
+
+            // Track this as removing everything before and after the selected area.
+            if (end < originalLength)
+            {
+                currentCutRegions.Add((end, originalLength));
+            }
+            if (start > 0)
+            {
+                currentCutRegions.Add((0, start));
+            }
+
+            waveformViewer.SetAudioData(currentPcmData);
+            waveformViewer.ClearLoopPoints();
+            UpdateEditButtonStates();
+
+            if (isPlaying)
+            {
+                StopPreview();
+            }
+
+            AddToListBox($"Crop to selection applied. Audio length: {originalLength} → {currentPcmData.Length}.");
+        }
+
 
         private void BtnUndo_Click(object sender, EventArgs e)
         {
@@ -1364,6 +1408,7 @@ namespace WavConvert4Amiga
             btnZoomOut.Enabled = false;
             btnPreviewLoop.Enabled = false;
             btnCut.Enabled = false;
+            btnCropToLoop.Enabled = false;
             btnUndo.Enabled = false;
             btnRedo.Enabled = false;
 
@@ -1408,7 +1453,6 @@ namespace WavConvert4Amiga
             btnZoomIn.Enabled = true;
             btnZoomOut.Enabled = true;
             btnPreviewLoop.Enabled = true;
-            btnCut.Enabled = true;
             btnUndo.Enabled = true;
             btnRedo.Enabled = true;
 
@@ -1425,6 +1469,8 @@ namespace WavConvert4Amiga
             // Ensure stop button stays enabled
             btnStopRecording.Enabled = false;
             btnStopRecording.Invalidate();
+
+            UpdateEditButtonStates();
         }
 
         private void InitializeRecordingButtons()
@@ -1857,11 +1903,7 @@ namespace WavConvert4Amiga
                 }
             }
 
-            // Enable/disable cut button based on loop point validity
-            btnCut.Enabled = currentPcmData != null &&
-                             loopPoints.start >= 0 &&
-                             loopPoints.end >= 0 &&
-                             loopPoints.start < loopPoints.end;
+            UpdateSelectionActionButtons(loopPoints.start, loopPoints.end);
         }
 
         private void UpdatePreviewLoopPoints(int start, int end)
@@ -2054,6 +2096,14 @@ namespace WavConvert4Amiga
             btnCut.Enabled = false; // Disabled until loop points are set
             controlPanel.Controls.Add(btnCut);
 
+            // Crop-to-loop button (reverse cut)
+            btnCropToLoop = new RetroButton();
+            btnCropToLoop.Text = "Crop to Loop";
+            btnCropToLoop.Size = new Size(100, 25);
+            btnCropToLoop.Click += BtnCropToLoop_Click;
+            btnCropToLoop.Enabled = false; // Disabled until loop points are set
+            controlPanel.Controls.Add(btnCropToLoop);
+
             // Undo button
             btnUndo = new RetroButton();
             btnUndo.Text = "Undo";
@@ -2075,7 +2125,22 @@ namespace WavConvert4Amiga
         {
             btnUndo.Enabled = undoStack.Count > 0;
             btnRedo.Enabled = redoStack.Count > 0;
-            btnCut.Enabled = currentPcmData != null;
+            var (start, end) = waveformViewer.GetLoopPoints();
+            UpdateSelectionActionButtons(start, end);
+        }
+
+        private void UpdateSelectionActionButtons(int loopStart, int loopEnd)
+        {
+            bool hasValidSelection = currentPcmData != null &&
+                                     loopStart >= 0 &&
+                                     loopEnd > loopStart &&
+                                     loopEnd <= currentPcmData.Length;
+
+            btnCut.Enabled = hasValidSelection;
+            if (btnCropToLoop != null)
+            {
+                btnCropToLoop.Enabled = hasValidSelection;
+            }
         }
 
         private void InitializeAmplificationControls()
