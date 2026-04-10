@@ -226,7 +226,6 @@ namespace WavConvert4Amiga
             selectionAnchor = -1;
             previewLoopEnd = -1;
             isSelectingSecondPoint = false;
-            selectionMoved = false;
             LoopPointsChanged?.Invoke(this, (-1, -1));
             Invalidate();
         }
@@ -255,7 +254,6 @@ namespace WavConvert4Amiga
             if (loopStart >= 0 && loopEnd == -1)
             {
                 isSelectingSecondPoint = true;
-                selectionMoved = false;
                 selectionAnchor = loopStart;
                 previewLoopEnd = clickedSample;
                 Capture = true;
@@ -293,7 +291,6 @@ namespace WavConvert4Amiga
             else if (loopEnd == -1)
             {
                 isSelectingSecondPoint = true;
-                selectionMoved = false;
                 selectionAnchor = loopStart;
                 previewLoopEnd = clickedSample;
                 Capture = true;
@@ -318,7 +315,6 @@ namespace WavConvert4Amiga
 
                 if (newSample != previewLoopEnd)
                 {
-                    selectionMoved = true;
                     previewLoopEnd = newSample;
                     int previewStart = Math.Min(selectionAnchor, previewLoopEnd);
                     int previewEnd = Math.Max(selectionAnchor, previewLoopEnd);
@@ -476,7 +472,6 @@ namespace WavConvert4Amiga
                 selectionAnchor = -1;
                 previewLoopEnd = -1;
                 isSelectingSecondPoint = false;
-                selectionMoved = false;
                 Capture = false;
 
                 LoopPointsChanged?.Invoke(this, (loopStart, loopEnd));
