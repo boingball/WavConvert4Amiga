@@ -22,7 +22,7 @@ namespace WavConvert4Amiga
 
     public partial class MainForm : Form
     {
-        private const string VERSION = "1.4a";
+        private const string VERSION = "1.5";
         [DllImport("user32.dll")]
         private static extern IntPtr LoadCursorFromFile(string lpFileName);
         private SystemAudioRecorder audioRecorder;
@@ -303,7 +303,7 @@ namespace WavConvert4Amiga
             comboBoxSampleRate.Items.Add("28836Hz - Maximum Quality - PAL");
             comboBoxSampleRate.Items.Add("29101Hz - Maximum Quality - NTSC");
             // Allow manual entry by setting DropDownStyle to DropDown
-            comboBoxSampleRate.DropDownStyle = ComboBoxStyle.DropDown;
+            comboBoxSampleRate.DropDownStyle = ComboBoxStyle.DropDownList;
 
             // Optionally select a default value
             comboBoxSampleRate.SelectedIndex = 5; // Select the first item by default
