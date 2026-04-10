@@ -98,6 +98,22 @@ namespace WavConvert4Amiga
         private Label labelChipCrunchValue;
         private bool suppressSampleRateChangeEvents = false;
         private (double startSeconds, double endSeconds)? cropSelectionSeconds = null;
+        private CheckBox checkBoxPianoMode;
+        private Panel pianoPanel;
+        private readonly Dictionary<Keys, int> pianoKeyOffsets = new Dictionary<Keys, int>
+        {
+            { Keys.Z, 0 }, { Keys.S, 1 }, { Keys.X, 2 }, { Keys.D, 3 }, { Keys.C, 4 }, { Keys.V, 5 },
+            { Keys.G, 6 }, { Keys.B, 7 }, { Keys.H, 8 }, { Keys.N, 9 }, { Keys.J, 10 }, { Keys.M, 11 },
+            { Keys.Q, 12 }, { Keys.D2, 13 }, { Keys.W, 14 }, { Keys.D3, 15 }, { Keys.E, 16 }, { Keys.R, 17 },
+            { Keys.D5, 18 }, { Keys.T, 19 }, { Keys.D6, 20 }, { Keys.Y, 21 }, { Keys.D7, 22 }, { Keys.U, 23 }
+        };
+        private int activePianoOffset = -1;
+        private WaveOutEvent pianoWaveOut;
+        private MemoryStream pianoAudioStream;
+        private RawSourceWaveStream pianoWaveStream;
+        private readonly Dictionary<int, byte[]> pianoNoteCache = new Dictionary<int, byte[]>();
+        private byte[] pianoCacheSourceData;
+        private int pianoCacheBaseSampleRate = -1;
 
 
         private Dictionary<string, (int pal, int ntsc)> ptNoteToHz = new Dictionary<string, (int pal, int ntsc)>()
@@ -146,6 +162,7 @@ namespace WavConvert4Amiga
             InitializeWaveformControls();
             InitializeAmplificationControls();  // This creates trackBarAmplify
             InitializeEffectsPanel();
+            InitializePianoPanel();
             audioRecorder = new SystemAudioRecorder();
             InitializeRecordingButtons();
             InitializePTNoteComboBox();
@@ -241,6 +258,7 @@ namespace WavConvert4Amiga
             // Adjust these values based on your actual layout needs
             this.MinimumSize = new Size(800, 600);
             this.AutoScroll = true;
+            this.KeyPreview = true;
             BackColor = Color.FromArgb(80, 90, 120); // Darker blue-grey
             ForeColor = Color.White;
             // Set panel colors
@@ -339,6 +357,10 @@ namespace WavConvert4Amiga
                 {
                     checkBoxNTSC.Location = new Point(comboBoxPTNote.Right + gap, row1Y + 3);
                 }
+                if (checkBoxPianoMode != null)
+                {
+                    checkBoxPianoMode.Location = new Point(checkBoxNTSC.Right + 16, row1Y + 3);
+                }
 
                 int rightX = ClientSize.Width - margin;
                 Action<CheckBox, int> placeRight = (cb, y) =>
@@ -428,6 +450,16 @@ namespace WavConvert4Amiga
                 {
                     int effectsLeft = effectsPanel != null ? effectsPanel.Left : panelBottom.Width - 10;
                     fadePanel.Location = new Point(Math.Max(10, effectsLeft - fadePanel.Width - 10), 10);
+                }
+
+                if (pianoPanel != null)
+                {
+                    int leftBound = recordingPanel != null ? recordingPanel.Right + 12 : 10;
+                    int rightBound = fadePanel != null ? fadePanel.Left - 12 : panelBottom.Width - 10;
+                    int width = Math.Max(220, rightBound - leftBound);
+                    pianoPanel.Location = new Point(leftBound, 10);
+                    pianoPanel.Size = new Size(width, Math.Max(120, panelBottom.Height - 20));
+                    pianoPanel.Invalidate();
                 }
 
                 recordingIndicator?.BringToFront();
@@ -641,6 +673,13 @@ namespace WavConvert4Amiga
             StyleCheckbox(checkBoxNTSC); // Use existing checkbox styling
             checkBoxNTSC.CheckedChanged += CheckBoxNTSC_CheckedChanged;
 
+            checkBoxPianoMode = new CheckBox();
+            checkBoxPianoMode.Text = "Piano Mode";
+            checkBoxPianoMode.Location = new Point(checkBoxNTSC.Right + 20, comboBoxPTNote.Top + 2);
+            checkBoxPianoMode.AutoSize = true;
+            StyleCheckbox(checkBoxPianoMode);
+            checkBoxPianoMode.CheckedChanged += (s, e) => pianoPanel?.Invalidate();
+
             // Handle selection change
             comboBoxPTNote.SelectedIndexChanged += ComboBoxPTNote_SelectedIndexChanged;
             comboBoxPTNote.KeyDown += ComboBoxPTNote_KeyDown;
@@ -658,6 +697,232 @@ namespace WavConvert4Amiga
             this.Controls.Add(labelPTNote);
             this.Controls.Add(comboBoxPTNote);
             this.Controls.Add(checkBoxNTSC);
+            this.Controls.Add(checkBoxPianoMode);
+        }
+
+        private void InitializePianoPanel()
+        {
+            pianoPanel = new Panel
+            {
+                Location = new Point(350, 10),
+                Size = new Size(360, 180),
+                BackColor = Color.FromArgb(180, 190, 210)
+            };
+            SetDoubleBuffered(pianoPanel);
+            AddBevelToPanel(pianoPanel);
+            pianoPanel.Paint += PianoPanel_Paint;
+            pianoPanel.MouseDown += PianoPanel_MouseDown;
+            panelBottom.Controls.Add(pianoPanel);
+        }
+
+        private void SetDoubleBuffered(Control control)
+        {
+            typeof(Control).GetProperty("DoubleBuffered", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+                ?.SetValue(control, true, null);
+        }
+
+        private void PianoPanel_Paint(object sender, PaintEventArgs e)
+        {
+            e.Graphics.Clear(Color.FromArgb(180, 190, 210));
+            string title = checkBoxPianoMode != null && checkBoxPianoMode.Checked
+                ? "Piano Active: click keys or use Z/S/X..."
+                : "Piano Off: enable Piano Mode";
+            using (var titleBrush = new SolidBrush(Color.Black))
+            {
+                e.Graphics.DrawString(title, FontManager.GetMainFont(8f), titleBrush, new PointF(8, 8));
+            }
+
+            Rectangle keyboardArea = new Rectangle(8, 30, Math.Max(220, pianoPanel.Width - 16), Math.Max(90, pianoPanel.Height - 38));
+            DrawPianoKeyboard(e.Graphics, keyboardArea);
+        }
+
+        private void DrawPianoKeyboard(Graphics g, Rectangle area)
+        {
+            int whiteKeyCount = 14;
+            float whiteKeyWidth = area.Width / (float)whiteKeyCount;
+            int whiteKeyHeight = area.Height;
+
+            for (int i = 0; i < whiteKeyCount; i++)
+            {
+                int x = area.Left + (int)Math.Round(i * whiteKeyWidth);
+                int keyWidth = Math.Max(1, (int)Math.Ceiling(whiteKeyWidth));
+                int chromaticOffset = WhiteIndexToChromaticOffset(i);
+                bool isActive = activePianoOffset == chromaticOffset;
+                using (var brush = new SolidBrush(isActive ? Color.FromArgb(255, 215, 0) : Color.White))
+                {
+                    g.FillRectangle(brush, x, area.Top, keyWidth, whiteKeyHeight);
+                }
+                g.DrawRectangle(Pens.Black, x, area.Top, keyWidth, whiteKeyHeight);
+            }
+
+            int blackKeyHeight = (int)(whiteKeyHeight * 0.62f);
+            float blackKeyWidth = whiteKeyWidth * 0.6f;
+            int[] blackWhitePositions = { 0, 1, 3, 4, 5, 7, 8, 10, 11, 12 };
+
+            for (int i = 0; i < blackWhitePositions.Length; i++)
+            {
+                int whiteIndex = blackWhitePositions[i];
+                int chromaticOffset = WhiteIndexToChromaticOffset(whiteIndex) + 1;
+                int x = area.Left + (int)Math.Round((whiteIndex + 1) * whiteKeyWidth - (blackKeyWidth / 2f));
+                bool isActive = activePianoOffset == chromaticOffset;
+                using (var brush = new SolidBrush(isActive ? Color.FromArgb(255, 215, 0) : Color.Black))
+                {
+                    g.FillRectangle(brush, x, area.Top, (int)blackKeyWidth, blackKeyHeight);
+                }
+                g.DrawRectangle(Pens.Black, x, area.Top, (int)blackKeyWidth, blackKeyHeight);
+            }
+        }
+
+        private int WhiteIndexToChromaticOffset(int whiteIndex)
+        {
+            int[] offsets = { 0, 2, 4, 5, 7, 9, 11 };
+            int octave = whiteIndex / 7;
+            int degree = whiteIndex % 7;
+            return (octave * 12) + offsets[degree];
+        }
+
+        private void PianoPanel_MouseDown(object sender, MouseEventArgs e)
+        {
+            if (checkBoxPianoMode == null || !checkBoxPianoMode.Checked)
+            {
+                return;
+            }
+
+            int noteOffset = GetPianoOffsetFromPoint(e.Location);
+            if (noteOffset >= 0)
+            {
+                TriggerPianoNote(noteOffset);
+            }
+        }
+
+        private int GetPianoOffsetFromPoint(Point point)
+        {
+            Rectangle area = new Rectangle(8, 30, Math.Max(220, pianoPanel.Width - 16), Math.Max(90, pianoPanel.Height - 38));
+            if (!area.Contains(point))
+            {
+                return -1;
+            }
+
+            int whiteKeyCount = 14;
+            float whiteKeyWidth = area.Width / (float)whiteKeyCount;
+            int blackKeyHeight = (int)(area.Height * 0.62f);
+            float blackKeyWidth = whiteKeyWidth * 0.6f;
+            int[] blackWhitePositions = { 0, 1, 3, 4, 5, 7, 8, 10, 11, 12 };
+
+            if (point.Y <= area.Top + blackKeyHeight)
+            {
+                foreach (int whiteIndex in blackWhitePositions)
+                {
+                    int x = area.Left + (int)Math.Round((whiteIndex + 1) * whiteKeyWidth - (blackKeyWidth / 2f));
+                    Rectangle blackRect = new Rectangle(x, area.Top, (int)blackKeyWidth, blackKeyHeight);
+                    if (blackRect.Contains(point))
+                    {
+                        return WhiteIndexToChromaticOffset(whiteIndex) + 1;
+                    }
+                }
+            }
+
+            int clickedWhiteIndex = Math.Max(0, Math.Min(whiteKeyCount - 1, (int)((point.X - area.Left) / whiteKeyWidth)));
+            return WhiteIndexToChromaticOffset(clickedWhiteIndex);
+        }
+
+        private void TriggerPianoNote(int noteOffset)
+        {
+            if (currentPcmData == null || currentPcmData.Length == 0)
+            {
+                return;
+            }
+
+            int baseSampleRate = GetSelectedSampleRate();
+            activePianoOffset = noteOffset;
+            byte[] noteData = GetOrCreatePianoNoteData(noteOffset, baseSampleRate);
+            PlayPianoSample(noteData, baseSampleRate);
+            pianoPanel?.Invalidate();
+        }
+
+        private byte[] GetOrCreatePianoNoteData(int noteOffset, int baseSampleRate)
+        {
+            if (!ReferenceEquals(pianoCacheSourceData, currentPcmData) || pianoCacheBaseSampleRate != baseSampleRate)
+            {
+                pianoNoteCache.Clear();
+                pianoCacheSourceData = currentPcmData;
+                pianoCacheBaseSampleRate = baseSampleRate;
+            }
+
+            if (pianoNoteCache.TryGetValue(noteOffset, out byte[] cached))
+            {
+                return cached;
+            }
+
+            double ratio = Math.Pow(2.0, noteOffset / 12.0);
+            int outputLength = Math.Max(1, (int)Math.Round(currentPcmData.Length / ratio));
+            byte[] output = new byte[outputLength];
+
+            for (int i = 0; i < outputLength; i++)
+            {
+                int sourceIndex = (int)(i * ratio);
+                if (sourceIndex >= currentPcmData.Length)
+                {
+                    sourceIndex = currentPcmData.Length - 1;
+                }
+                output[i] = currentPcmData[sourceIndex];
+            }
+
+            pianoNoteCache[noteOffset] = output;
+            return output;
+        }
+
+        private void EnsurePianoWaveOut()
+        {
+            if (pianoWaveOut != null)
+            {
+                return;
+            }
+
+            pianoWaveOut = new WaveOutEvent
+            {
+                DesiredLatency = 40,
+                NumberOfBuffers = 2
+            };
+            pianoWaveOut.PlaybackStopped += (s, e) =>
+            {
+                activePianoOffset = -1;
+                if (pianoPanel != null && !pianoPanel.IsDisposed)
+                {
+                    pianoPanel.BeginInvoke(new Action(() => pianoPanel.Invalidate()));
+                }
+            };
+        }
+
+        private void PlayPianoSample(byte[] noteData, int playbackSampleRate)
+        {
+            try
+            {
+                lock (playbackLock)
+                {
+                    pianoWaveOut?.Stop();
+                    pianoWaveOut?.Dispose();
+                    pianoWaveOut = null;
+                    EnsurePianoWaveOut();
+
+                    pianoWaveStream?.Dispose();
+                    pianoWaveStream = null;
+
+                    pianoAudioStream?.Dispose();
+                    pianoAudioStream = null;
+
+                    pianoAudioStream = new MemoryStream(noteData, false);
+                    pianoWaveStream = new RawSourceWaveStream(pianoAudioStream, new WaveFormat(playbackSampleRate, 8, 1));
+
+                    pianoWaveOut.Init(pianoWaveStream);
+                    pianoWaveOut.Play();
+                }
+            }
+            catch
+            {
+                activePianoOffset = -1;
+                pianoPanel?.Invalidate();
+            }
         }
 
         private void ComboBoxPTNote_DrawItem(object sender, DrawItemEventArgs e)
@@ -4413,6 +4678,16 @@ namespace WavConvert4Amiga
         {
             base.OnKeyDown(e);
 
+            if (checkBoxPianoMode != null && checkBoxPianoMode.Checked && !e.Control && !e.Alt)
+            {
+                if (pianoKeyOffsets.TryGetValue(e.KeyCode, out int noteOffset))
+                {
+                    TriggerPianoNote(noteOffset);
+                    e.Handled = true;
+                    return;
+                }
+            }
+
             if (e.Control)
             {
                 switch (e.KeyCode)
@@ -4439,6 +4714,10 @@ namespace WavConvert4Amiga
 
             // Clean up audio resources
             StopPreview();
+            pianoWaveOut?.Stop();
+            pianoWaveOut?.Dispose();
+            pianoWaveStream?.Dispose();
+            pianoAudioStream?.Dispose();
         }
 
         private void ApplyAmigaStyle(Control.ControlCollection controls)
