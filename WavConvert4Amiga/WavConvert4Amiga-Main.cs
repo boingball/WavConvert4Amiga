@@ -99,7 +99,10 @@ namespace WavConvert4Amiga
         private bool suppressSampleRateChangeEvents = false;
         private (double startSeconds, double endSeconds)? cropSelectionSeconds = null;
         private CheckBox checkBoxPianoMode;
+        private CheckBox checkBoxShowPad;
         private Panel pianoPanel;
+        private Button btnPadAssign;
+        private ContextMenuStrip padAssignContextMenu;
         private readonly Dictionary<Keys, int> pianoKeyOffsets = new Dictionary<Keys, int>
         {
             { Keys.Z, 0 }, { Keys.S, 1 }, { Keys.X, 2 }, { Keys.D, 3 }, { Keys.C, 4 }, { Keys.V, 5 },
@@ -111,6 +114,15 @@ namespace WavConvert4Amiga
         private WaveOutEvent pianoWaveOut;
         private MemoryStream pianoAudioStream;
         private RawSourceWaveStream pianoWaveStream;
+        private sealed class PadPlaybackVoice
+        {
+            public WaveOutEvent Output;
+            public MemoryStream AudioStream;
+            public RawSourceWaveStream WaveStream;
+        }
+        private readonly List<PadPlaybackVoice> activePadVoices = new List<PadPlaybackVoice>();
+        private readonly PadSlotInfo[] padSlots = Enumerable.Range(0, 16).Select(_ => new PadSlotInfo()).ToArray();
+        private SamplePadForm samplePadForm;
 
 
         private Dictionary<string, (int pal, int ntsc)> ptNoteToHz = new Dictionary<string, (int pal, int ntsc)>()
@@ -374,6 +386,16 @@ namespace WavConvert4Amiga
                 placeRight(checkBoxLowPass, row1Y + 3);
                 placeRight(checkBoxEnable8SVX, row1Y + 3);
                 placeRight(checkBox16BitWAV, row1Y + 3);
+                placeRight(checkBoxShowPad, row1Y + 3);
+
+                int leftClusterRight = checkBoxPianoMode != null ? checkBoxPianoMode.Right : checkBoxNTSC.Right;
+                if (checkBoxShowPad != null && checkBoxShowPad.Left < leftClusterRight + gap)
+                {
+                    int width = checkBoxShowPad.PreferredSize.Width;
+                    checkBoxShowPad.Location = new Point(
+                        Math.Max(margin, ClientSize.Width - margin - width),
+                        row2Y + 5);
+                }
 
                 const int queueButtonHeight = 30;
                 const int queueButtonCount = 5;
@@ -677,6 +699,13 @@ namespace WavConvert4Amiga
             StyleCheckbox(checkBoxPianoMode);
             checkBoxPianoMode.CheckedChanged += (s, e) => pianoPanel?.Invalidate();
 
+            checkBoxShowPad = new CheckBox();
+            checkBoxShowPad.Text = "Show PAD";
+            checkBoxShowPad.Location = new Point(checkBoxPianoMode.Right + 20, comboBoxPTNote.Top + 2);
+            checkBoxShowPad.AutoSize = true;
+            StyleCheckbox(checkBoxShowPad);
+            checkBoxShowPad.CheckedChanged += CheckBoxShowPad_CheckedChanged;
+
             // Handle selection change
             comboBoxPTNote.SelectedIndexChanged += ComboBoxPTNote_SelectedIndexChanged;
             comboBoxPTNote.KeyDown += ComboBoxPTNote_KeyDown;
@@ -695,6 +724,7 @@ namespace WavConvert4Amiga
             this.Controls.Add(comboBoxPTNote);
             this.Controls.Add(checkBoxNTSC);
             this.Controls.Add(checkBoxPianoMode);
+            this.Controls.Add(checkBoxShowPad);
         }
 
         private void InitializePianoPanel()
@@ -890,6 +920,208 @@ namespace WavConvert4Amiga
                 activePianoOffset = -1;
                 pianoPanel?.Invalidate();
             }
+        }
+
+        private void BtnPadAssign_Click(object sender, EventArgs e)
+        {
+            if (currentPcmData == null || currentPcmData.Length == 0)
+            {
+                MessageBox.Show("Load or record a sample first, then assign it to a PAD slot.", "No Sample Loaded",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            if (padAssignContextMenu == null || padAssignContextMenu.IsDisposed)
+            {
+                padAssignContextMenu = new ContextMenuStrip();
+            }
+
+            padAssignContextMenu.Items.Clear();
+            for (int i = 0; i < 16; i++)
+            {
+                int slot = i;
+                string slotLabel = $"Slot {slot + 1}";
+                if (padSlots[slot].HasData && !string.IsNullOrWhiteSpace(padSlots[slot].Name))
+                {
+                    slotLabel += $" ({padSlots[slot].Name})";
+                }
+
+                var item = new ToolStripMenuItem(slotLabel);
+                item.Click += (s, args) => AssignCurrentSampleToPadSlot(slot);
+                padAssignContextMenu.Items.Add(item);
+            }
+
+            var button = sender as Control;
+            Point menuPoint = button != null
+                ? button.PointToScreen(new Point(0, button.Height))
+                : Cursor.Position;
+            padAssignContextMenu.Show(menuPoint);
+        }
+
+        private void AssignCurrentSampleToPadSlot(int slot)
+        {
+            if (slot < 0 || slot >= padSlots.Length || currentPcmData == null || currentPcmData.Length == 0)
+            {
+                return;
+            }
+
+            byte[] copiedAudio = new byte[currentPcmData.Length];
+            Array.Copy(currentPcmData, copiedAudio, currentPcmData.Length);
+
+            int sampleRate = GetSelectedSampleRate();
+            string sourceName = !string.IsNullOrWhiteSpace(lastLoadedFilePath)
+                ? Path.GetFileNameWithoutExtension(lastLoadedFilePath)
+                : $"Sample {slot + 1}";
+
+            padSlots[slot].AudioData = copiedAudio;
+            padSlots[slot].SampleRate = sampleRate;
+            padSlots[slot].Name = sourceName;
+
+            AddToListBox($"PAD: Assigned current sample to slot {slot + 1} ({sampleRate}Hz).");
+            samplePadForm?.RefreshSlots(padSlots);
+        }
+
+        private void CheckBoxShowPad_CheckedChanged(object sender, EventArgs e)
+        {
+            if (checkBoxShowPad == null)
+            {
+                return;
+            }
+
+            if (checkBoxShowPad.Checked)
+            {
+                EnsureSamplePadWindow();
+                samplePadForm?.Show(this);
+                samplePadForm?.BringToFront();
+            }
+            else
+            {
+                samplePadForm?.Hide();
+            }
+        }
+
+        private void EnsureSamplePadWindow()
+        {
+            if (samplePadForm != null && !samplePadForm.IsDisposed)
+            {
+                samplePadForm.RefreshSlots(padSlots);
+                return;
+            }
+
+            samplePadForm = new SamplePadForm(PlayPadSlot, EditPadSlotInMain);
+            samplePadForm.FormClosed += (s, e) =>
+            {
+                if (checkBoxShowPad != null && !checkBoxShowPad.IsDisposed)
+                {
+                    checkBoxShowPad.Checked = false;
+                }
+            };
+            samplePadForm.RefreshSlots(padSlots);
+        }
+
+        private void PlayPadSlot(int slot)
+        {
+            if (slot < 0 || slot >= padSlots.Length)
+            {
+                return;
+            }
+
+            var slotInfo = padSlots[slot];
+            if (slotInfo == null || !slotInfo.HasData)
+            {
+                return;
+            }
+
+            try
+            {
+                lock (playbackLock)
+                {
+                    var voice = new PadPlaybackVoice
+                    {
+                        Output = new WaveOutEvent
+                        {
+                            DesiredLatency = 90,
+                            NumberOfBuffers = 3
+                        }
+                    };
+
+                    voice.AudioStream = new MemoryStream(slotInfo.AudioData, false);
+                    voice.WaveStream = new RawSourceWaveStream(voice.AudioStream, new WaveFormat(slotInfo.SampleRate, 8, 1));
+                    voice.Output.Init(voice.WaveStream);
+                    voice.Output.PlaybackStopped += (s, e) =>
+                    {
+                        lock (playbackLock)
+                        {
+                            activePadVoices.Remove(voice);
+                        }
+                        voice.Output.Dispose();
+                        voice.WaveStream.Dispose();
+                        voice.AudioStream.Dispose();
+                    };
+
+                    activePadVoices.Add(voice);
+                    if (activePadVoices.Count > 24)
+                    {
+                        StopAndDisposePadVoice(activePadVoices[0]);
+                        activePadVoices.RemoveAt(0);
+                    }
+
+                    voice.Output.Play();
+                }
+            }
+            catch
+            {
+                // keep pad playback resilient without interrupting editing workflow
+            }
+        }
+
+        private void StopAndDisposePadVoice(PadPlaybackVoice voice)
+        {
+            if (voice == null)
+            {
+                return;
+            }
+
+            try { voice.Output?.Stop(); } catch { }
+            try { voice.Output?.Dispose(); } catch { }
+            try { voice.WaveStream?.Dispose(); } catch { }
+            try { voice.AudioStream?.Dispose(); } catch { }
+        }
+
+        private void EditPadSlotInMain(int slot)
+        {
+            if (slot < 0 || slot >= padSlots.Length)
+            {
+                return;
+            }
+
+            var slotInfo = padSlots[slot];
+            if (slotInfo == null || !slotInfo.HasData)
+            {
+                MessageBox.Show("That PAD slot is empty.", "PAD", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            StopPreview();
+            ClearAllState();
+
+            currentPcmData = new byte[slotInfo.AudioData.Length];
+            Array.Copy(slotInfo.AudioData, currentPcmData, slotInfo.AudioData.Length);
+
+            originalPcmData = new byte[slotInfo.AudioData.Length];
+            Array.Copy(slotInfo.AudioData, originalPcmData, slotInfo.AudioData.Length);
+
+            originalSampleRate = slotInfo.SampleRate;
+            originalFormat = new WaveFormat(slotInfo.SampleRate, 8, 1);
+            isRecorded = true;
+            lastLoadedFilePath = null;
+
+            SetSampleRateComboTextWithoutProcessing(slotInfo.SampleRate, $"{slotInfo.SampleRate}Hz - PAD Slot {slot + 1}");
+
+            waveformViewer?.SetAudioData(currentPcmData);
+            waveformViewer?.Invalidate();
+            StoreInitialState();
+            AddToListBox($"PAD: Loaded slot {slot + 1} into editor.");
         }
 
         private void ComboBoxPTNote_DrawItem(object sender, DrawItemEventArgs e)
@@ -1200,41 +1432,42 @@ namespace WavConvert4Amiga
             // Create a flow layout panel for all buttons at the top
             FlowLayoutPanel controlPanel = new FlowLayoutPanel();
             controlPanel.Dock = DockStyle.Top;
-            controlPanel.Padding = new Padding(5);
-            controlPanel.WrapContents = true;
-            controlPanel.AutoSize = true;
-            controlPanel.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            controlPanel.Padding = new Padding(3);
+            controlPanel.WrapContents = false;
+            controlPanel.AutoSize = false;
+            controlPanel.AutoScroll = true;
+            controlPanel.Height = 30;
             controlPanel.Margin = new Padding(0);
             panelWaveform.Controls.Add(controlPanel);
             InitializeEditButtons(controlPanel);
 
             // Common button size
-            Size buttonSize = new Size(100, 25);
+            Size buttonSize = new Size(86, 22);
 
             // Add Clear Button
             Button btnClearWaveform = new RetroButton();
             btnClearWaveform.Text = "Clear";
-            btnClearWaveform.Size = new Size(100, 25);
+            btnClearWaveform.Size = buttonSize;
             btnClearWaveform.Click += BtnClearWaveform_Click;
             controlPanel.Controls.Add(btnClearWaveform);
 
             //Zoom Buttons
             btnZoomIn = new RetroButton();
             btnZoomIn.Text = "Zoom In";
-            btnZoomIn.Size = new Size(100, 25);
+            btnZoomIn.Size = buttonSize;
             btnZoomIn.Click += BtnZoomIn_Click;
             controlPanel.Controls.Add(btnZoomIn);
 
             btnZoomOut = new RetroButton();
             btnZoomOut.Text = "Zoom Out";
-            btnZoomOut.Size = new Size(100, 25);
+            btnZoomOut.Size = buttonSize;
             btnZoomOut.Click += BtnZoomOut_Click;
             controlPanel.Controls.Add(btnZoomOut);
 
             // Add Save Loop Points (8SVX) button
             Button btnSaveLoop8SVX = new RetroButton();
             btnSaveLoop8SVX.Text = "Save Loop Points (8SVX)";
-            btnSaveLoop8SVX.Size = new Size(160, 25); // Wider for longer text
+            btnSaveLoop8SVX.Size = new Size(170, 22); // Wider for longer text
             btnSaveLoop8SVX.Click += BtnSaveLoop8SVX_Click;
             controlPanel.Controls.Add(btnSaveLoop8SVX);
 
@@ -1257,6 +1490,12 @@ namespace WavConvert4Amiga
             btnPreviewLoop.Size = buttonSize;
             btnPreviewLoop.Click += BtnPreviewLoop_Click;
             controlPanel.Controls.Add(btnPreviewLoop);
+
+            btnPadAssign = new RetroButton();
+            btnPadAssign.Text = "PAD";
+            btnPadAssign.Size = buttonSize;
+            btnPadAssign.Click += BtnPadAssign_Click;
+            controlPanel.Controls.Add(btnPadAssign);
 
             // Initialize the waveform viewer AFTER the control panel
             waveformViewer = new WaveformViewer();
@@ -2341,10 +2580,11 @@ namespace WavConvert4Amiga
 
         private void InitializeEditButtons(FlowLayoutPanel controlPanel)
         {
+            Size editButtonSize = new Size(86, 22);
             // Cut button
             btnCut = new RetroButton();
             btnCut.Text = "Cut";
-            btnCut.Size = new Size(100, 25);
+            btnCut.Size = editButtonSize;
             btnCut.Click += BtnCut_Click;
             btnCut.Enabled = false; // Disabled until loop points are set
             controlPanel.Controls.Add(btnCut);
@@ -2352,7 +2592,7 @@ namespace WavConvert4Amiga
             // Crop-to-loop button (reverse cut)
             btnCropToLoop = new RetroButton();
             btnCropToLoop.Text = "Crop to Loop";
-            btnCropToLoop.Size = new Size(100, 25);
+            btnCropToLoop.Size = new Size(110, 22);
             btnCropToLoop.Click += BtnCropToLoop_Click;
             btnCropToLoop.Enabled = false; // Disabled until loop points are set
             controlPanel.Controls.Add(btnCropToLoop);
@@ -2360,7 +2600,7 @@ namespace WavConvert4Amiga
             // Undo button
             btnUndo = new RetroButton();
             btnUndo.Text = "Undo";
-            btnUndo.Size = new Size(100, 25);
+            btnUndo.Size = editButtonSize;
             btnUndo.Click += BtnUndo_Click;
             btnUndo.Enabled = false;
             controlPanel.Controls.Add(btnUndo);
@@ -2368,7 +2608,7 @@ namespace WavConvert4Amiga
             // Redo button
             btnRedo = new RetroButton();
             btnRedo.Text = "Redo";
-            btnRedo.Size = new Size(100, 25);
+            btnRedo.Size = editButtonSize;
             btnRedo.Click += BtnRedo_Click;
             btnRedo.Enabled = false;
             controlPanel.Controls.Add(btnRedo);
@@ -4805,6 +5045,16 @@ namespace WavConvert4Amiga
             pianoWaveOut?.Dispose();
             pianoWaveStream?.Dispose();
             pianoAudioStream?.Dispose();
+            lock (playbackLock)
+            {
+                foreach (var voice in activePadVoices.ToList())
+                {
+                    StopAndDisposePadVoice(voice);
+                }
+                activePadVoices.Clear();
+            }
+            padAssignContextMenu?.Dispose();
+            samplePadForm?.Close();
         }
 
         private void ApplyAmigaStyle(Control.ControlCollection controls)
