@@ -111,6 +111,9 @@ namespace WavConvert4Amiga
         private WaveOutEvent pianoWaveOut;
         private MemoryStream pianoAudioStream;
         private RawSourceWaveStream pianoWaveStream;
+        private readonly Dictionary<int, byte[]> pianoNoteCache = new Dictionary<int, byte[]>();
+        private byte[] pianoCacheSourceData;
+        private int pianoCacheBaseSampleRate = -1;
 
 
         private Dictionary<string, (int pal, int ntsc)> ptNoteToHz = new Dictionary<string, (int pal, int ntsc)>()
@@ -705,10 +708,17 @@ namespace WavConvert4Amiga
                 Size = new Size(360, 180),
                 BackColor = Color.FromArgb(180, 190, 210)
             };
+            SetDoubleBuffered(pianoPanel);
             AddBevelToPanel(pianoPanel);
             pianoPanel.Paint += PianoPanel_Paint;
             pianoPanel.MouseDown += PianoPanel_MouseDown;
             panelBottom.Controls.Add(pianoPanel);
+        }
+
+        private void SetDoubleBuffered(Control control)
+        {
+            typeof(Control).GetProperty("DoubleBuffered", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+                ?.SetValue(control, true, null);
         }
 
         private void PianoPanel_Paint(object sender, PaintEventArgs e)
@@ -824,16 +834,67 @@ namespace WavConvert4Amiga
             }
 
             int baseSampleRate = GetSelectedSampleRate();
-            double ratio = Math.Pow(2.0, noteOffset / 12.0);
-            int noteSampleRate = (int)Math.Round(baseSampleRate * ratio);
-            noteSampleRate = Math.Max(100, Math.Min(192000, noteSampleRate));
-
             activePianoOffset = noteOffset;
+            byte[] noteData = GetOrCreatePianoNoteData(noteOffset, baseSampleRate);
+            PlayPianoSample(noteData, baseSampleRate);
             pianoPanel?.Invalidate();
-            PlayPianoSample(noteSampleRate);
         }
 
-        private void PlayPianoSample(int noteSampleRate)
+        private byte[] GetOrCreatePianoNoteData(int noteOffset, int baseSampleRate)
+        {
+            if (!ReferenceEquals(pianoCacheSourceData, currentPcmData) || pianoCacheBaseSampleRate != baseSampleRate)
+            {
+                pianoNoteCache.Clear();
+                pianoCacheSourceData = currentPcmData;
+                pianoCacheBaseSampleRate = baseSampleRate;
+            }
+
+            if (pianoNoteCache.TryGetValue(noteOffset, out byte[] cached))
+            {
+                return cached;
+            }
+
+            double ratio = Math.Pow(2.0, noteOffset / 12.0);
+            int outputLength = Math.Max(1, (int)Math.Round(currentPcmData.Length / ratio));
+            byte[] output = new byte[outputLength];
+
+            for (int i = 0; i < outputLength; i++)
+            {
+                int sourceIndex = (int)(i * ratio);
+                if (sourceIndex >= currentPcmData.Length)
+                {
+                    sourceIndex = currentPcmData.Length - 1;
+                }
+                output[i] = currentPcmData[sourceIndex];
+            }
+
+            pianoNoteCache[noteOffset] = output;
+            return output;
+        }
+
+        private void EnsurePianoWaveOut()
+        {
+            if (pianoWaveOut != null)
+            {
+                return;
+            }
+
+            pianoWaveOut = new WaveOutEvent
+            {
+                DesiredLatency = 40,
+                NumberOfBuffers = 2
+            };
+            pianoWaveOut.PlaybackStopped += (s, e) =>
+            {
+                activePianoOffset = -1;
+                if (pianoPanel != null && !pianoPanel.IsDisposed)
+                {
+                    pianoPanel.BeginInvoke(new Action(() => pianoPanel.Invalidate()));
+                }
+            };
+        }
+
+        private void PlayPianoSample(byte[] noteData, int playbackSampleRate)
         {
             try
             {
@@ -842,6 +903,7 @@ namespace WavConvert4Amiga
                     pianoWaveOut?.Stop();
                     pianoWaveOut?.Dispose();
                     pianoWaveOut = null;
+                    EnsurePianoWaveOut();
 
                     pianoWaveStream?.Dispose();
                     pianoWaveStream = null;
@@ -849,21 +911,10 @@ namespace WavConvert4Amiga
                     pianoAudioStream?.Dispose();
                     pianoAudioStream = null;
 
-                    byte[] data = new byte[currentPcmData.Length];
-                    Array.Copy(currentPcmData, data, currentPcmData.Length);
-                    pianoAudioStream = new MemoryStream(data);
-                    pianoWaveStream = new RawSourceWaveStream(pianoAudioStream, new WaveFormat(noteSampleRate, 8, 1));
+                    pianoAudioStream = new MemoryStream(noteData, false);
+                    pianoWaveStream = new RawSourceWaveStream(pianoAudioStream, new WaveFormat(playbackSampleRate, 8, 1));
 
-                    pianoWaveOut = new WaveOutEvent();
                     pianoWaveOut.Init(pianoWaveStream);
-                    pianoWaveOut.PlaybackStopped += (s, e) =>
-                    {
-                        activePianoOffset = -1;
-                        if (pianoPanel != null && !pianoPanel.IsDisposed)
-                        {
-                            pianoPanel.BeginInvoke(new Action(() => pianoPanel.Invalidate()));
-                        }
-                    };
                     pianoWaveOut.Play();
                 }
             }
