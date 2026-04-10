@@ -436,8 +436,8 @@ namespace WavConvert4Amiga
                 float[] source = BytesToFloats(input);
                 float[] output = new float[source.Length];
 
-                int frameSize = Math.Max(256, sampleRate / 70); // ~14ms
-                int hopSize = Math.Max(96, frameSize / 3);
+                int frameSize = Math.Max(256, sampleRate / 80); // ~12ms
+                int hopSize = Math.Max(64, frameSize / 4);
                 int frameCount = Math.Max(1, ((source.Length - 1) / hopSize) + 1);
 
                 float[] pitchTrack = new float[frameCount];
@@ -446,6 +446,7 @@ namespace WavConvert4Amiga
                 float[] voicedTrack = new float[frameCount];
                 ChipWaveType[] waveTrack = new ChipWaveType[frameCount];
 
+                float previousTrackedFrequency = 220f;
                 for (int frame = 0; frame < frameCount; frame++)
                 {
                     int start = frame * hopSize;
@@ -464,15 +465,30 @@ namespace WavConvert4Amiga
                     float freq = EstimateFundamentalFrequency(source, sampleRate, start, len, 70, 1800);
                     float zcr = EstimateZeroCrossingRate(source, start, len);
                     float rms = EstimateRms(source, start, len);
-                    bool voiced = freq > 0 && zcr < 0.50f && rms > 0.01f;
+                    bool voiced = freq > 0 && zcr < 0.50f && rms > 0.008f;
 
                     if (voiced)
                     {
-                        freq = QuantizeFrequencyToSemitone(freq);
+                        // keep note stability while avoiding hard semitone snapping artifacts
+                        float octaveUp = freq * 2f;
+                        float octaveDown = freq * 0.5f;
+                        float candidate = freq;
+                        if (Math.Abs(octaveUp - previousTrackedFrequency) < Math.Abs(candidate - previousTrackedFrequency))
+                        {
+                            candidate = octaveUp;
+                        }
+                        if (Math.Abs(octaveDown - previousTrackedFrequency) < Math.Abs(candidate - previousTrackedFrequency))
+                        {
+                            candidate = octaveDown;
+                        }
+
+                        float quantized = QuantizeFrequencyToSemitone(candidate);
+                        freq = Lerp(candidate, quantized, 0.35f);
+                        previousTrackedFrequency = freq;
                     }
                     else
                     {
-                        freq = frame > 0 ? pitchTrack[frame - 1] : 220f;
+                        freq = frame > 0 ? pitchTrack[frame - 1] : previousTrackedFrequency;
                     }
 
                     pitchTrack[frame] = freq;
@@ -504,13 +520,16 @@ namespace WavConvert4Amiga
                     phase += smoothedFreq / Math.Max(1, sampleRate);
                     if (phase >= 1f) phase -= 1f;
 
-                    float baseWave = GenerateChipSample(wave, phase);
-                    float harmonic2 = GenerateChipSample(ChipWaveType.Saw, (phase * 2f) % 1f) * 0.25f;
-                    float harmonic3 = GenerateChipSample(ChipWaveType.Pulse, (phase * 3f) % 1f) * 0.12f;
-                    float synth = (baseWave + harmonic2 + harmonic3) * smoothedEnv * 1.2f;
+                    // 808-ish core: sine-heavy body + controlled click/noise + mild harmonics
+                    float sine = (float)Math.Sin(2.0 * Math.PI * phase);
+                    float baseWave = (sine * 0.78f) + (GenerateChipSample(wave, phase) * 0.22f);
+                    float harmonic2 = (float)Math.Sin(2.0 * Math.PI * ((phase * 2f) % 1f)) * 0.16f;
+                    float harmonic3 = GenerateChipSample(ChipWaveType.Pulse, (phase * 3f) % 1f) * 0.07f;
+                    float synth = (baseWave + harmonic2 + harmonic3) * smoothedEnv * 1.3f;
 
-                    float noise = ((((i * 1103515245) + 12345) & 0x7fff) / 16384.0f - 1.0f) * 0.25f * (1f - targetVoiced);
-                    float dryBlend = source[i] * (0.18f + (Math.Max(0f, Math.Min(1f, targetZcr)) * 0.10f));
+                    float transientWeight = Math.Max(0f, Math.Min(1f, targetZcr / 0.35f));
+                    float noise = ((((i * 1103515245) + 12345) & 0x7fff) / 16384.0f - 1.0f) * 0.20f * (1f - targetVoiced);
+                    float dryBlend = source[i] * (0.28f + (transientWeight * 0.14f));
 
                     output[i] = synth + noise + dryBlend;
                 }
