@@ -90,6 +90,11 @@ namespace WavConvert4Amiga
         private Label labelPTNote;
         private Panel recordingPanel;
         private Panel effectsPanel;
+        private Panel fadePanel;
+        private TrackBar trackBarChipQuality;
+        private TrackBar trackBarChipCrunch;
+        private Label labelChipQualityValue;
+        private Label labelChipCrunchValue;
         private bool suppressSampleRateChangeEvents = false;
 
 
@@ -404,12 +409,21 @@ namespace WavConvert4Amiga
                 if (recordingPanel != null)
                 {
                     recordingPanel.Location = new Point(10, 10);
+                    recordingPanel.BringToFront();
                 }
 
                 if (effectsPanel != null)
                 {
                     effectsPanel.Location = new Point(Math.Max(10, panelBottom.Width - effectsPanel.Width - 10), 10);
                 }
+
+                if (fadePanel != null)
+                {
+                    int effectsLeft = effectsPanel != null ? effectsPanel.Left : panelBottom.Width - 10;
+                    fadePanel.Location = new Point(Math.Max(10, effectsLeft - fadePanel.Width - 10), 10);
+                }
+
+                recordingIndicator?.BringToFront();
             }
             finally
             {
@@ -1300,6 +1314,12 @@ namespace WavConvert4Amiga
                             case "noisegate":
                                 result = audioEffects.ApplyNoiseGate(result, 0.04f, 0.992f);
                                 break;
+                            case "chipify_mono":
+                                result = audioEffects.ApplyChipifyMonoEffect(result, targetSampleRate, GetChipifyQuality(), GetChipifyCrunch());
+                                break;
+                            case "chipify_deluxe":
+                                result = audioEffects.ApplyChipifyDeluxeEffect(result, targetSampleRate, GetChipifyQuality(), GetChipifyCrunch());
+                                break;
                         }
                     }
                 }
@@ -1412,7 +1432,8 @@ namespace WavConvert4Amiga
             {
                 Location = new Point(10, 10),
                 Size = new Size(325, 160),
-                BackColor = Color.FromArgb(180, 190, 210)
+                BackColor = Color.FromArgb(180, 190, 210),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left
             };
             AddBevelToPanel(recordingPanel);
 
@@ -1443,6 +1464,8 @@ namespace WavConvert4Amiga
                     recordingIndicator.RecordingType = "system";
                     recordingIndicator.Visible = true;
                     recordingIndicator.StartBlinking();
+                    recordingPanel.BringToFront();
+                    recordingIndicator.BringToFront();
                 }
                 catch (Exception ex)
                 {
@@ -1546,6 +1569,8 @@ namespace WavConvert4Amiga
                     recordingIndicator.RecordingType = "microphone";
                     recordingIndicator.Visible = true;
                     recordingIndicator.StartBlinking();
+                    recordingPanel.BringToFront();
+                    recordingIndicator.BringToFront();
                 }
                 catch (Exception ex)
                 {
@@ -1627,8 +1652,9 @@ namespace WavConvert4Amiga
             };
             recordingPanel.Controls.Add(btnStopRecording);
 
-            // Add the recording panel to the bottom panel
+            // Keep recording panel in bottom-left tools area
             panelBottom.Controls.Add(recordingPanel);
+            recordingPanel.BringToFront();
         }
 
         // Add this helper method to refresh the microphone list
@@ -2178,11 +2204,11 @@ namespace WavConvert4Amiga
         {
             audioEffects = new AudioEffectsProcessor(cursorType => SetCustomCursor(cursorType));
 
-            // Create effects panel
+            // Main effects panel
             effectsPanel = new Panel
             {
                 Location = new Point(panelBottom.Width - 300, 10),
-                Size = new Size(280, 225),
+                Size = new Size(280, 195),
                 BackColor = Color.FromArgb(180, 190, 210)
             };
             AddBevelToPanel(effectsPanel);
@@ -2214,13 +2240,11 @@ namespace WavConvert4Amiga
                 ("Vocal Remove", ApplyVocalRemovalEffect),
                 ("Chorus", ApplyChorusEffect),
                 ("Overdrive", ApplyOverdriveEffect),
-                ("Reverse", ApplyReverseEffect),
                 ("Noise Gate", ApplyNoiseGateEffect),
-                ("Fade In", ApplyFadeInEffect),
-                ("Fade Out", ApplyFadeOutEffect),
                 ("Telephone BP", ApplyTelephoneBandPassEffect),
                 ("AM Radio BP", ApplyAmRadioBandPassEffect),
-                ("Reset", ResetEffects)
+                ("Chipify Mono", ApplyChipifyMonoEffect),
+                ("Chipify Deluxe", ApplyChipifyDeluxeEffect)
             };
 
             for (int i = 0; i < buttons.Length; i++)
@@ -2233,6 +2257,122 @@ namespace WavConvert4Amiga
             }
 
             panelBottom.Controls.Add(effectsPanel);
+
+            // Envelope/utility panel
+            fadePanel = new Panel
+            {
+                Location = new Point(Math.Max(10, effectsPanel.Left - 260), 10),
+                Size = new Size(250, 195),
+                BackColor = Color.FromArgb(180, 190, 210)
+            };
+            AddBevelToPanel(fadePanel);
+
+            Label labelUtility = new Label
+            {
+                Text = "Envelope / Utility",
+                Location = new Point(0, 0),
+                AutoSize = true,
+                ForeColor = Color.FromArgb(255, 215, 0)
+            };
+            fadePanel.Controls.Add(labelUtility);
+
+            var utilityButtons = new (string Text, EventHandler Handler)[]
+            {
+                ("Fade In", ApplyFadeInEffect),
+                ("Fade Out", ApplyFadeOutEffect),
+                ("Reverse", ApplyReverseEffect),
+                ("Reset", ResetEffects)
+            };
+
+            int utilTop = 30;
+            int utilButtonWidth = 84;
+            int utilButtonHeight = 32;
+            int utilColumnGap = 8;
+            int utilRowGap = 8;
+
+            for (int i = 0; i < utilityButtons.Length; i++)
+            {
+                int row = i / 2;
+                int col = i % 2;
+                int x = 8 + (col * (utilButtonWidth + utilColumnGap));
+                int y = utilTop + (row * (utilButtonHeight + utilRowGap));
+                CreateEffectButton(utilityButtons[i].Text, new Point(x, y), fadePanel, utilityButtons[i].Handler, new Size(utilButtonWidth, utilButtonHeight));
+            }
+
+            Label labelChipTweaks = new Label
+            {
+                Text = "Chipify Tweak",
+                Location = new Point(156, 30),
+                AutoSize = true,
+                ForeColor = Color.FromArgb(235, 235, 235)
+            };
+            fadePanel.Controls.Add(labelChipTweaks);
+
+            Label labelChipQuality = new Label
+            {
+                Text = "Quality",
+                Location = new Point(156, 52),
+                AutoSize = true,
+                ForeColor = Color.FromArgb(235, 235, 235)
+            };
+            fadePanel.Controls.Add(labelChipQuality);
+
+            trackBarChipQuality = new TrackBar
+            {
+                Minimum = 0,
+                Maximum = 100,
+                TickFrequency = 10,
+                Value = 65,
+                TickStyle = TickStyle.None,
+                Size = new Size(86, 24),
+                Location = new Point(156, 66)
+            };
+            trackBarChipQuality.Scroll += (s, e) => UpdateChipifyKnobLabels();
+            fadePanel.Controls.Add(trackBarChipQuality);
+
+            labelChipQualityValue = new Label
+            {
+                Text = "65",
+                Location = new Point(220, 52),
+                AutoSize = true,
+                ForeColor = Color.FromArgb(235, 235, 235)
+            };
+            fadePanel.Controls.Add(labelChipQualityValue);
+
+            Label labelChipCrunch = new Label
+            {
+                Text = "Crunch",
+                Location = new Point(156, 98),
+                AutoSize = true,
+                ForeColor = Color.FromArgb(235, 235, 235)
+            };
+            fadePanel.Controls.Add(labelChipCrunch);
+
+            trackBarChipCrunch = new TrackBar
+            {
+                Minimum = 0,
+                Maximum = 100,
+                TickFrequency = 10,
+                Value = 50,
+                TickStyle = TickStyle.None,
+                Size = new Size(86, 24),
+                Location = new Point(156, 112)
+            };
+            trackBarChipCrunch.Scroll += (s, e) => UpdateChipifyKnobLabels();
+            fadePanel.Controls.Add(trackBarChipCrunch);
+
+            labelChipCrunchValue = new Label
+            {
+                Text = "50",
+                Location = new Point(220, 98),
+                AutoSize = true,
+                ForeColor = Color.FromArgb(235, 235, 235)
+            };
+            fadePanel.Controls.Add(labelChipCrunchValue);
+
+            UpdateChipifyKnobLabels();
+
+            panelBottom.Controls.Add(fadePanel);
         }
 
         private void CreateEffectButton(string text, Point location, Panel parent, EventHandler clickHandler, Size? sizeOverride = null)
@@ -2245,6 +2385,29 @@ namespace WavConvert4Amiga
             };
             button.Click += clickHandler;
             parent.Controls.Add(button);
+        }
+
+        private void UpdateChipifyKnobLabels()
+        {
+            if (labelChipQualityValue != null && trackBarChipQuality != null)
+            {
+                labelChipQualityValue.Text = trackBarChipQuality.Value.ToString();
+            }
+
+            if (labelChipCrunchValue != null && trackBarChipCrunch != null)
+            {
+                labelChipCrunchValue.Text = trackBarChipCrunch.Value.ToString();
+            }
+        }
+
+        private float GetChipifyQuality()
+        {
+            return trackBarChipQuality != null ? trackBarChipQuality.Value / 100f : 0.65f;
+        }
+
+        private float GetChipifyCrunch()
+        {
+            return trackBarChipCrunch != null ? trackBarChipCrunch.Value / 100f : 0.5f;
         }
 
         // Effect handlers
@@ -2332,57 +2495,10 @@ namespace WavConvert4Amiga
                 // Create undo point BEFORE modifying anything
                 PushUndo(currentPcmData);
 
-                // Add effect to current effects list
+                // Add effect to current effects list and apply through the provided callback.
+                // This ensures selection-aware effects (fade/reverse) honor current loop selection.
                 currentEffects.Add(effectName);
-
-                // Apply effect directly to current data
-                int targetSampleRate = GetSelectedSampleRate();
-
-                switch (effectName)
-                {
-                    case "underwater":
-                        currentPcmData = audioEffects.ApplyUnderwaterEffect(currentPcmData, targetSampleRate);
-                        break;
-                    case "robot":
-                        currentPcmData = audioEffects.ApplyRobotEffect(currentPcmData, targetSampleRate);
-                        break;
-                    case "highpitch":
-                        currentPcmData = audioEffects.ApplyPitchShift(currentPcmData, targetSampleRate, 1.5f);
-                        break;
-                    case "lowpitch":
-                        currentPcmData = audioEffects.ApplyPitchShift(currentPcmData, targetSampleRate, 0.75f);
-                        break;
-                    case "echo":
-                        currentPcmData = audioEffects.ApplyEchoEffect(currentPcmData, targetSampleRate);
-                        break;
-                    case "vocal":
-                        currentPcmData = audioEffects.ApplyVocalRemoval(currentPcmData, targetSampleRate);
-                        break;
-                    case "chorus":
-                        currentPcmData = audioEffects.ApplyChorusEffect(currentPcmData, targetSampleRate);
-                        break;
-                    case "overdrive":
-                        currentPcmData = audioEffects.ApplyOverdriveEffect(currentPcmData);
-                        break;
-                    case "reverse":
-                        currentPcmData = audioEffects.ApplyReverseEffect(currentPcmData);
-                        break;
-                    case "fadein":
-                        currentPcmData = audioEffects.ApplyFadeIn(currentPcmData);
-                        break;
-                    case "fadeout":
-                        currentPcmData = audioEffects.ApplyFadeOut(currentPcmData);
-                        break;
-                    case "bandpass_telephone":
-                        currentPcmData = audioEffects.ApplyBandPassEffect(currentPcmData, targetSampleRate, 1800.0, 0.9);
-                        break;
-                    case "bandpass_amradio":
-                        currentPcmData = audioEffects.ApplyBandPassEffect(currentPcmData, targetSampleRate, 1200.0, 0.7);
-                        break;
-                    case "noisegate":
-                        currentPcmData = audioEffects.ApplyNoiseGate(currentPcmData, 0.04f, 0.992f);
-                        break;
-                }
+                currentPcmData = effectFunction();
 
                 waveformViewer.SetAudioData(currentPcmData);
                 redoStack.Clear();
@@ -2502,6 +2618,16 @@ namespace WavConvert4Amiga
         private void ApplyNoiseGateEffect(object sender, EventArgs e)
         {
             ApplyTrackedEffect("noisegate", () => audioEffects.ApplyNoiseGate(currentPcmData, 0.04f, 0.992f));
+        }
+
+        private void ApplyChipifyMonoEffect(object sender, EventArgs e)
+        {
+            ApplyTrackedEffect("chipify_mono", () => audioEffects.ApplyChipifyMonoEffect(currentPcmData, GetSelectedSampleRate(), GetChipifyQuality(), GetChipifyCrunch()));
+        }
+
+        private void ApplyChipifyDeluxeEffect(object sender, EventArgs e)
+        {
+            ApplyTrackedEffect("chipify_deluxe", () => audioEffects.ApplyChipifyDeluxeEffect(currentPcmData, GetSelectedSampleRate(), GetChipifyQuality(), GetChipifyCrunch()));
         }
 
         private byte[] ApplySelectionEffect(Func<byte[], byte[]> effectFunction, string effectLabel)
@@ -2799,6 +2925,12 @@ namespace WavConvert4Amiga
                             break;
                         case "noisegate":
                             result = audioEffects.ApplyNoiseGate(result, 0.04f, 0.992f);
+                            break;
+                        case "chipify_mono":
+                            result = audioEffects.ApplyChipifyMonoEffect(result, targetSampleRate, GetChipifyQuality(), GetChipifyCrunch());
+                            break;
+                        case "chipify_deluxe":
+                            result = audioEffects.ApplyChipifyDeluxeEffect(result, targetSampleRate, GetChipifyQuality(), GetChipifyCrunch());
                             break;
                     }
                 }
