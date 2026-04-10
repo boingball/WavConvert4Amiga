@@ -1434,7 +1434,7 @@ namespace WavConvert4Amiga
             // Create a panel for the recording controls
             recordingPanel = new Panel
             {
-                Location = new Point(10, 10),
+                Location = new Point(10, 52),
                 Size = new Size(325, 160),
                 BackColor = Color.FromArgb(180, 190, 210),
                 Anchor = AnchorStyles.Top | AnchorStyles.Left
