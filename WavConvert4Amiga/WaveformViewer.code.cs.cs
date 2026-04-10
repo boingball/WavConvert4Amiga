@@ -27,7 +27,6 @@ namespace WavConvert4Amiga
         public event EventHandler<(int start, int end)> LoopPointsChanged;
         private bool isDraggingEnd = false;
         private bool isSelectingSecondPoint = false;
-        private bool selectionMoved = false;
         private int selectionAnchor = -1;
         private int previewLoopEnd = -1;
         private const int DRAG_THRESHOLD = 5;
