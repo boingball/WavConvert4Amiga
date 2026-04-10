@@ -380,7 +380,7 @@ namespace WavConvert4Amiga
                 int waveformTop = row2Y + queueButtonHeight + 4;
                 const int listHeight = 68;
                 const int queueHeight = 95;
-                const int bottomHeight = 220;
+                const int bottomHeight = 235;
 
                 int availableForWaveform = ClientSize.Height - waveformTop - listHeight - queueHeight - bottomHeight - (gap * 4) - margin;
                 int waveformHeight = Math.Max(180, Math.Min(340, availableForWaveform));
@@ -2266,7 +2266,7 @@ namespace WavConvert4Amiga
             fadePanel = new Panel
             {
                 Location = new Point(Math.Max(10, effectsPanel.Left - 260), 10),
-                Size = new Size(250, 195),
+                Size = new Size(250, 215),
                 BackColor = Color.FromArgb(180, 190, 210)
             };
             AddBevelToPanel(fadePanel);
@@ -2288,9 +2288,9 @@ namespace WavConvert4Amiga
                 ("Reset", ResetEffects)
             };
 
-            int utilTop = 30;
+            int utilTop = 18;
             int utilButtonWidth = 84;
-            int utilButtonHeight = 32;
+            int utilButtonHeight = 24;
             int utilColumnGap = 8;
             int utilRowGap = 8;
 
@@ -2306,7 +2306,7 @@ namespace WavConvert4Amiga
             Label labelChipTweaks = new Label
             {
                 Text = "Chipify Tweak",
-                Location = new Point(8, 118),
+                Location = new Point(8, 85),
                 AutoSize = true,
                 ForeColor = Color.FromArgb(235, 235, 235)
             };
@@ -2315,7 +2315,7 @@ namespace WavConvert4Amiga
             Label labelChipQuality = new Label
             {
                 Text = "Quality",
-                Location = new Point(8, 140),
+                Location = new Point(8, 110),
                 AutoSize = true,
                 ForeColor = Color.FromArgb(235, 235, 235)
             };
@@ -2328,8 +2328,8 @@ namespace WavConvert4Amiga
                 TickFrequency = 10,
                 Value = 65,
                 TickStyle = TickStyle.None,
-                Size = new Size(180, 24),
-                Location = new Point(56, 134)
+                Size = new Size(180, 18),
+                Location = new Point(56, 110)
             };
             trackBarChipQuality.Scroll += (s, e) => UpdateChipifyKnobLabels();
             fadePanel.Controls.Add(trackBarChipQuality);
@@ -2337,7 +2337,7 @@ namespace WavConvert4Amiga
             labelChipQualityValue = new Label
             {
                 Text = "65",
-                Location = new Point(220, 140),
+                Location = new Point(36, 125),
                 AutoSize = true,
                 ForeColor = Color.FromArgb(235, 235, 235)
             };
@@ -2346,7 +2346,7 @@ namespace WavConvert4Amiga
             Label labelChipCrunch = new Label
             {
                 Text = "Crunch",
-                Location = new Point(8, 166),
+                Location = new Point(8, 150),
                 AutoSize = true,
                 ForeColor = Color.FromArgb(235, 235, 235)
             };
@@ -2359,8 +2359,8 @@ namespace WavConvert4Amiga
                 TickFrequency = 10,
                 Value = 50,
                 TickStyle = TickStyle.None,
-                Size = new Size(180, 24),
-                Location = new Point(56, 160)
+                Size = new Size(180, 18),
+                Location = new Point(56, 150)
             };
             trackBarChipCrunch.Scroll += (s, e) => UpdateChipifyKnobLabels();
             fadePanel.Controls.Add(trackBarChipCrunch);
@@ -2368,7 +2368,7 @@ namespace WavConvert4Amiga
             labelChipCrunchValue = new Label
             {
                 Text = "50",
-                Location = new Point(220, 166),
+                Location = new Point(36, 165),
                 AutoSize = true,
                 ForeColor = Color.FromArgb(235, 235, 235)
             };
