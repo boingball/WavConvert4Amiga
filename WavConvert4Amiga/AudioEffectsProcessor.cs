@@ -354,40 +354,65 @@ namespace WavConvert4Amiga
                 float[] source = BytesToFloats(input);
                 float[] output = new float[source.Length];
 
-                float baseFrequency = EstimateFundamentalFrequency(source, sampleRate, 0, source.Length);
-                if (baseFrequency <= 0)
+                int frameSize = Math.Max(128, sampleRate / 90); // ~11ms
+                int hopSize = Math.Max(64, frameSize / 2);
+                int frameCount = Math.Max(1, ((source.Length - 1) / hopSize) + 1);
+
+                float[] pitchTrack = new float[frameCount];
+                float[] rmsTrack = new float[frameCount];
+                float[] zcrTrack = new float[frameCount];
+
+                for (int frame = 0; frame < frameCount; frame++)
                 {
-                    baseFrequency = 220.0f;
+                    int start = frame * hopSize;
+                    int end = Math.Min(source.Length, start + frameSize);
+                    int len = end - start;
+                    if (len < 32)
+                    {
+                        pitchTrack[frame] = frame > 0 ? pitchTrack[frame - 1] : 220f;
+                        rmsTrack[frame] = frame > 0 ? rmsTrack[frame - 1] : 0f;
+                        zcrTrack[frame] = frame > 0 ? zcrTrack[frame - 1] : 0.15f;
+                        continue;
+                    }
+
+                    float freq = EstimateFundamentalFrequency(source, sampleRate, start, len, 85, 1600);
+                    pitchTrack[frame] = freq > 0 ? QuantizeFrequencyToSemitone(freq) : (frame > 0 ? pitchTrack[frame - 1] : 220f);
+                    rmsTrack[frame] = EstimateRms(source, start, len);
+                    zcrTrack[frame] = EstimateZeroCrossingRate(source, start, len);
                 }
 
-                baseFrequency = QuantizeFrequencyToSemitone(baseFrequency);
-
-                float env = 0f;
-                float attack = 0.18f;
-                float release = 0.996f;
                 float phase = 0f;
-                float increment = baseFrequency / Math.Max(1, sampleRate);
+                float smoothedFreq = 220f;
+                float smoothedEnv = 0f;
+                float lowpass = 0f;
 
                 for (int i = 0; i < source.Length; i++)
                 {
-                    float abs = Math.Abs(source[i]);
-                    if (abs > env)
-                    {
-                        env = env + (abs - env) * attack;
-                    }
-                    else
-                    {
-                        env *= release;
-                    }
+                    int frame = Math.Min(frameCount - 1, i / hopSize);
+                    int nextFrame = Math.Min(frameCount - 1, frame + 1);
+                    float frameT = hopSize > 0 ? (float)(i - (frame * hopSize)) / hopSize : 0f;
 
+                    float targetFreq = Lerp(pitchTrack[frame], pitchTrack[nextFrame], frameT);
+                    float targetEnv = Lerp(rmsTrack[frame], rmsTrack[nextFrame], frameT);
+                    float targetZcr = Lerp(zcrTrack[frame], zcrTrack[nextFrame], frameT);
+
+                    smoothedFreq = (smoothedFreq * 0.90f) + (targetFreq * 0.10f);
+                    smoothedEnv = (smoothedEnv * 0.92f) + (targetEnv * 0.08f);
+
+                    float pulseWidth = 0.28f + (Math.Max(0f, Math.Min(1f, targetZcr / 0.35f)) * 0.30f);
+                    float increment = smoothedFreq / Math.Max(1, sampleRate);
                     phase += increment;
                     if (phase >= 1f) phase -= 1f;
 
-                    float pulse = phase < 0.42f ? 1f : -1f;
-                    float tri = 1f - (4f * Math.Abs(phase - 0.5f));
-                    float mixed = (pulse * 0.75f) + (tri * 0.25f);
+                    float pulse = phase < pulseWidth ? 1f : -1f;
+                    float triangle = 1f - (4f * Math.Abs(phase - 0.5f));
+                    float synth = (pulse * 0.80f) + (triangle * 0.20f);
 
-                    output[i] = mixed * env * 0.95f;
+                    // keep attack detail so output still resembles source
+                    lowpass = (lowpass * 0.94f) + (source[i] * 0.06f);
+                    float transient = source[i] - lowpass;
+
+                    output[i] = (synth * smoothedEnv * 1.25f) + (transient * 0.35f);
                 }
 
                 return ConvertToBytes(output, 1.0f);
@@ -411,62 +436,83 @@ namespace WavConvert4Amiga
                 float[] source = BytesToFloats(input);
                 float[] output = new float[source.Length];
 
-                int frameSize = Math.Max(128, sampleRate / 50); // ~20ms
-                int hopSize = Math.Max(64, frameSize / 2);
+                int frameSize = Math.Max(256, sampleRate / 70); // ~14ms
+                int hopSize = Math.Max(96, frameSize / 3);
+                int frameCount = Math.Max(1, ((source.Length - 1) / hopSize) + 1);
 
-                float globalEnvelope = 0f;
-                float attack = 0.25f;
-                float release = 0.995f;
-                float phase = 0f;
-                float smoothedFreq = 220f;
+                float[] pitchTrack = new float[frameCount];
+                float[] rmsTrack = new float[frameCount];
+                float[] zcrTrack = new float[frameCount];
+                float[] voicedTrack = new float[frameCount];
+                ChipWaveType[] waveTrack = new ChipWaveType[frameCount];
 
-                for (int frameStart = 0; frameStart < source.Length; frameStart += hopSize)
+                for (int frame = 0; frame < frameCount; frame++)
                 {
-                    int frameEnd = Math.Min(source.Length, frameStart + frameSize);
-                    int frameLen = frameEnd - frameStart;
-                    if (frameLen < 32) break;
+                    int start = frame * hopSize;
+                    int end = Math.Min(source.Length, start + frameSize);
+                    int len = end - start;
+                    if (len < 32)
+                    {
+                        pitchTrack[frame] = frame > 0 ? pitchTrack[frame - 1] : 220f;
+                        rmsTrack[frame] = frame > 0 ? rmsTrack[frame - 1] : 0f;
+                        zcrTrack[frame] = frame > 0 ? zcrTrack[frame - 1] : 0.2f;
+                        voicedTrack[frame] = frame > 0 ? voicedTrack[frame - 1] : 0f;
+                        waveTrack[frame] = frame > 0 ? waveTrack[frame - 1] : ChipWaveType.Pulse;
+                        continue;
+                    }
 
-                    float detected = EstimateFundamentalFrequency(source, sampleRate, frameStart, frameLen);
-                    float zcr = EstimateZeroCrossingRate(source, frameStart, frameLen);
+                    float freq = EstimateFundamentalFrequency(source, sampleRate, start, len, 70, 1800);
+                    float zcr = EstimateZeroCrossingRate(source, start, len);
+                    float rms = EstimateRms(source, start, len);
+                    bool voiced = freq > 0 && zcr < 0.50f && rms > 0.01f;
 
-                    bool voiced = detected > 0 && zcr < 0.45f;
                     if (voiced)
                     {
-                        detected = QuantizeFrequencyToSemitone(detected);
-                        smoothedFreq = (smoothedFreq * 0.7f) + (detected * 0.3f);
+                        freq = QuantizeFrequencyToSemitone(freq);
                     }
-
-                    ChipWaveType wave = SelectChipWaveType(zcr, voiced);
-                    float frameIncrement = smoothedFreq / Math.Max(1, sampleRate);
-
-                    int synthEnd = Math.Min(source.Length, frameStart + hopSize);
-                    for (int i = frameStart; i < synthEnd; i++)
+                    else
                     {
-                        float abs = Math.Abs(source[i]);
-                        if (abs > globalEnvelope)
-                        {
-                            globalEnvelope = globalEnvelope + (abs - globalEnvelope) * attack;
-                        }
-                        else
-                        {
-                            globalEnvelope *= release;
-                        }
-
-                        float sample;
-                        if (!voiced)
-                        {
-                            sample = (((i * 1103515245) + 12345) & 0x7fff) / 16384.0f - 1.0f;
-                            sample *= 0.5f;
-                        }
-                        else
-                        {
-                            phase += frameIncrement;
-                            if (phase >= 1f) phase -= 1f;
-                            sample = GenerateChipSample(wave, phase);
-                        }
-
-                        output[i] = sample * globalEnvelope * 0.95f;
+                        freq = frame > 0 ? pitchTrack[frame - 1] : 220f;
                     }
+
+                    pitchTrack[frame] = freq;
+                    zcrTrack[frame] = zcr;
+                    rmsTrack[frame] = rms;
+                    voicedTrack[frame] = voiced ? 1f : 0f;
+                    waveTrack[frame] = SelectChipWaveType(zcr, voiced);
+                }
+
+                float phase = 0f;
+                float smoothedFreq = 220f;
+                float smoothedEnv = 0f;
+
+                for (int i = 0; i < source.Length; i++)
+                {
+                    int frame = Math.Min(frameCount - 1, i / hopSize);
+                    int nextFrame = Math.Min(frameCount - 1, frame + 1);
+                    float frameT = hopSize > 0 ? (float)(i - (frame * hopSize)) / hopSize : 0f;
+
+                    float targetFreq = Lerp(pitchTrack[frame], pitchTrack[nextFrame], frameT);
+                    float targetRms = Lerp(rmsTrack[frame], rmsTrack[nextFrame], frameT);
+                    float targetVoiced = Lerp(voicedTrack[frame], voicedTrack[nextFrame], frameT);
+                    float targetZcr = Lerp(zcrTrack[frame], zcrTrack[nextFrame], frameT);
+                    ChipWaveType wave = frameT < 0.5f ? waveTrack[frame] : waveTrack[nextFrame];
+
+                    smoothedFreq = (smoothedFreq * 0.84f) + (targetFreq * 0.16f);
+                    smoothedEnv = (smoothedEnv * 0.88f) + (targetRms * 0.12f);
+
+                    phase += smoothedFreq / Math.Max(1, sampleRate);
+                    if (phase >= 1f) phase -= 1f;
+
+                    float baseWave = GenerateChipSample(wave, phase);
+                    float harmonic2 = GenerateChipSample(ChipWaveType.Saw, (phase * 2f) % 1f) * 0.25f;
+                    float harmonic3 = GenerateChipSample(ChipWaveType.Pulse, (phase * 3f) % 1f) * 0.12f;
+                    float synth = (baseWave + harmonic2 + harmonic3) * smoothedEnv * 1.2f;
+
+                    float noise = ((((i * 1103515245) + 12345) & 0x7fff) / 16384.0f - 1.0f) * 0.25f * (1f - targetVoiced);
+                    float dryBlend = source[i] * (0.18f + (Math.Max(0f, Math.Min(1f, targetZcr)) * 0.10f));
+
+                    output[i] = synth + noise + dryBlend;
                 }
 
                 return ConvertToBytes(output, 1.0f);
@@ -616,13 +662,21 @@ namespace WavConvert4Amiga
 
         private float EstimateFundamentalFrequency(float[] source, int sampleRate, int start, int length)
         {
+            return EstimateFundamentalFrequency(source, sampleRate, start, length, 70, 1400);
+        }
+
+        private float EstimateFundamentalFrequency(float[] source, int sampleRate, int start, int length, int minFrequency, int maxFrequency)
+        {
             if (length <= 0 || sampleRate <= 0)
             {
                 return 0f;
             }
 
-            int minLag = Math.Max(1, sampleRate / 1400); // ~1400 Hz
-            int maxLag = Math.Min(length - 2, sampleRate / 70); // ~70 Hz
+            int clampedMinFrequency = Math.Max(30, minFrequency);
+            int clampedMaxFrequency = Math.Max(clampedMinFrequency + 1, maxFrequency);
+
+            int minLag = Math.Max(1, sampleRate / clampedMaxFrequency);
+            int maxLag = Math.Min(length - 2, sampleRate / clampedMinFrequency);
             if (maxLag <= minLag)
             {
                 return 0f;
@@ -666,6 +720,28 @@ namespace WavConvert4Amiga
             }
 
             return (float)sampleRate / bestLag;
+        }
+
+        private float EstimateRms(float[] source, int start, int length)
+        {
+            if (length <= 0)
+            {
+                return 0f;
+            }
+
+            float sum = 0f;
+            int end = start + length;
+            for (int i = start; i < end; i++)
+            {
+                sum += source[i] * source[i];
+            }
+
+            return (float)Math.Sqrt(sum / length);
+        }
+
+        private float Lerp(float a, float b, float t)
+        {
+            return a + ((b - a) * Math.Max(0f, Math.Min(1f, t)));
         }
 
         private float QuantizeFrequencyToSemitone(float frequency)
