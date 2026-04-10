@@ -384,6 +384,10 @@ namespace WavConvert4Amiga
                 {
                     checkBoxPianoMode.Location = new Point(checkBoxNTSC.Right + 16, row1Y + 3);
                 }
+                if (checkBoxShowPad != null)
+                {
+                    checkBoxShowPad.Location = new Point(checkBoxPianoMode.Right + 16, row1Y + 3);
+                }
 
                 int rightX = ClientSize.Width - margin;
                 Action<CheckBox, int> placeRight = (cb, y) =>
@@ -1657,6 +1661,12 @@ namespace WavConvert4Amiga
             btnBackToMasterSample.Enabled = false;
             btnBackToMasterSample.Click += BtnBackToMasterSample_Click;
             waveformControlPanel.Controls.Add(btnBackToMasterSample);
+
+            btnPadAssign = new RetroButton();
+            btnPadAssign.Text = "PAD";
+            btnPadAssign.Size = buttonSize;
+            btnPadAssign.Click += BtnPadAssign_Click;
+            controlPanel.Controls.Add(btnPadAssign);
 
             // Initialize the waveform viewer AFTER the control panel
             waveformViewer = new WaveformViewer();
