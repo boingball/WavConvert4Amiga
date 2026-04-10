@@ -20,11 +20,15 @@ namespace WavConvert4Amiga
         private readonly char[] keyMap = "1qazxsw23edcvfr4".ToCharArray();
         private readonly Action<int> playSlotAction;
         private readonly Action<int> editSlotAction;
+        private readonly Action stopAllAction;
+        private readonly bool[] loadedSlots = new bool[16];
+        private readonly bool[] playingSlots = new bool[16];
 
-        public SamplePadForm(Action<int> playSlotAction, Action<int> editSlotAction)
+        public SamplePadForm(Action<int> playSlotAction, Action<int> editSlotAction, Action stopAllAction)
         {
             this.playSlotAction = playSlotAction;
             this.editSlotAction = editSlotAction;
+            this.stopAllAction = stopAllAction;
 
             Text = "Sample PAD";
             StartPosition = FormStartPosition.CenterParent;
@@ -41,6 +45,16 @@ namespace WavConvert4Amiga
                 ForeColor = Color.Black
             };
             Controls.Add(title);
+
+            var stopAllButton = new RetroButton
+            {
+                Text = "Stop All",
+                Size = new Size(90, 24),
+                Location = new Point(240, 8),
+                Anchor = AnchorStyles.Top | AnchorStyles.Right
+            };
+            stopAllButton.Click += (s, e) => stopAllAction?.Invoke();
+            Controls.Add(stopAllButton);
 
             var table = new TableLayoutPanel
             {
@@ -103,13 +117,24 @@ namespace WavConvert4Amiga
             {
                 var slot = slots != null && i < slots.Length ? slots[i] : null;
                 bool hasData = slot != null && slot.HasData;
+                loadedSlots[i] = hasData;
                 string name = hasData ? (slot.Name ?? "Sample") : "(empty)";
                 string keyLabel = char.ToUpperInvariant(keyMap[i]).ToString();
 
                 padButtons[i].Text = $"{i + 1} [{keyLabel}]\n{name}";
-                padButtons[i].BackColor = hasData ? Color.FromArgb(210, 220, 240) : Color.FromArgb(185, 190, 205);
-                padButtons[i].Enabled = true;
+                ApplyPadVisual(i);
             }
+        }
+
+        public void SetPadPlaying(int slot, bool isPlaying)
+        {
+            if (slot < 0 || slot >= padButtons.Length)
+            {
+                return;
+            }
+
+            playingSlots[slot] = isPlaying;
+            ApplyPadVisual(slot);
         }
 
         private void SamplePadForm_KeyDown(object sender, KeyEventArgs e)
@@ -147,6 +172,25 @@ namespace WavConvert4Amiga
         private void TriggerSlot(int slot)
         {
             playSlotAction?.Invoke(slot);
+        }
+
+        private void ApplyPadVisual(int slot)
+        {
+            bool hasData = loadedSlots[slot];
+            bool isPlaying = playingSlots[slot];
+            var button = padButtons[slot];
+
+            button.Enabled = hasData;
+
+            if (!hasData)
+            {
+                button.BackColor = Color.FromArgb(140, 145, 160);
+                button.ForeColor = Color.FromArgb(90, 95, 110);
+                return;
+            }
+
+            button.ForeColor = Color.Black;
+            button.BackColor = isPlaying ? Color.FromArgb(255, 215, 0) : Color.FromArgb(210, 220, 240);
         }
 
         private string GetDefaultSlotLabel(int slot)

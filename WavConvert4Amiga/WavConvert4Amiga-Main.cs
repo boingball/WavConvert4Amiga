@@ -102,6 +102,9 @@ namespace WavConvert4Amiga
         private CheckBox checkBoxShowPad;
         private Panel pianoPanel;
         private Button btnPadAssign;
+        private Button btnBackToMasterSample;
+        private Button btnStopAllAudio;
+        private FlowLayoutPanel waveformControlPanel;
         private ContextMenuStrip padAssignContextMenu;
         private readonly Dictionary<Keys, int> pianoKeyOffsets = new Dictionary<Keys, int>
         {
@@ -121,8 +124,13 @@ namespace WavConvert4Amiga
             public RawSourceWaveStream WaveStream;
         }
         private readonly List<PadPlaybackVoice> activePadVoices = new List<PadPlaybackVoice>();
+        private readonly int[] activePadPlayCounts = new int[16];
         private readonly PadSlotInfo[] padSlots = Enumerable.Range(0, 16).Select(_ => new PadSlotInfo()).ToArray();
         private SamplePadForm samplePadForm;
+        private byte[] masterPcmBackup;
+        private byte[] masterOriginalPcmBackup;
+        private int masterOriginalSampleRate;
+        private bool hasMasterBackup = false;
 
 
         private Dictionary<string, (int pal, int ntsc)> ptNoteToHz = new Dictionary<string, (int pal, int ntsc)>()
@@ -294,6 +302,12 @@ namespace WavConvert4Amiga
             }
 
             this.Resize += HandleResponsiveLayoutResize;
+            this.Shown += (s, e) =>
+            {
+                LayoutMainFormControls();
+                waveformControlPanel?.PerformLayout();
+                panelWaveform?.PerformLayout();
+            };
         }
 
         private void MainForm_Load(object sender, EventArgs e)
@@ -1012,7 +1026,7 @@ namespace WavConvert4Amiga
                 return;
             }
 
-            samplePadForm = new SamplePadForm(PlayPadSlot, EditPadSlotInMain);
+            samplePadForm = new SamplePadForm(PlayPadSlot, EditPadSlotInMain, StopAllInteractiveAudio);
             samplePadForm.FormClosed += (s, e) =>
             {
                 if (checkBoxShowPad != null && !checkBoxShowPad.IsDisposed)
@@ -1021,6 +1035,10 @@ namespace WavConvert4Amiga
                 }
             };
             samplePadForm.RefreshSlots(padSlots);
+            for (int i = 0; i < activePadPlayCounts.Length; i++)
+            {
+                samplePadForm.SetPadPlaying(i, activePadPlayCounts[i] > 0);
+            }
         }
 
         private void PlayPadSlot(int slot)
@@ -1057,16 +1075,20 @@ namespace WavConvert4Amiga
                         lock (playbackLock)
                         {
                             activePadVoices.Remove(voice);
+                            activePadPlayCounts[slot] = Math.Max(0, activePadPlayCounts[slot] - 1);
                         }
-                        voice.Output.Dispose();
-                        voice.WaveStream.Dispose();
-                        voice.AudioStream.Dispose();
+                        try { voice.Output.Dispose(); } catch { }
+                        try { voice.WaveStream.Dispose(); } catch { }
+                        try { voice.AudioStream.Dispose(); } catch { }
+                        UpdatePadPlayingState(slot);
                     };
 
                     activePadVoices.Add(voice);
+                    activePadPlayCounts[slot]++;
+                    UpdatePadPlayingState(slot);
                     if (activePadVoices.Count > 24)
                     {
-                        StopAndDisposePadVoice(activePadVoices[0]);
+                        StopAndDisposePadVoice(activePadVoices[0], true);
                         activePadVoices.RemoveAt(0);
                     }
 
@@ -1079,7 +1101,7 @@ namespace WavConvert4Amiga
             }
         }
 
-        private void StopAndDisposePadVoice(PadPlaybackVoice voice)
+        private void StopAndDisposePadVoice(PadPlaybackVoice voice, bool resetPadIndicators = false)
         {
             if (voice == null)
             {
@@ -1090,6 +1112,15 @@ namespace WavConvert4Amiga
             try { voice.Output?.Dispose(); } catch { }
             try { voice.WaveStream?.Dispose(); } catch { }
             try { voice.AudioStream?.Dispose(); } catch { }
+
+            if (resetPadIndicators)
+            {
+                for (int i = 0; i < activePadPlayCounts.Length; i++)
+                {
+                    activePadPlayCounts[i] = 0;
+                    UpdatePadPlayingState(i);
+                }
+            }
         }
 
         private void EditPadSlotInMain(int slot)
@@ -1106,6 +1137,7 @@ namespace WavConvert4Amiga
                 return;
             }
 
+            SaveMasterSampleBackup();
             StopPreview();
             ClearAllState();
 
@@ -1125,7 +1157,123 @@ namespace WavConvert4Amiga
             waveformViewer?.SetAudioData(currentPcmData);
             waveformViewer?.Invalidate();
             StoreInitialState();
+            btnBackToMasterSample.Enabled = hasMasterBackup;
             AddToListBox($"PAD: Loaded slot {slot + 1} into editor.");
+        }
+
+        private void SaveMasterSampleBackup()
+        {
+            if (currentPcmData == null || currentPcmData.Length == 0)
+            {
+                return;
+            }
+
+            masterPcmBackup = new byte[currentPcmData.Length];
+            Array.Copy(currentPcmData, masterPcmBackup, currentPcmData.Length);
+
+            byte[] sourceOriginal = (originalPcmData != null && originalPcmData.Length > 0) ? originalPcmData : currentPcmData;
+            masterOriginalPcmBackup = new byte[sourceOriginal.Length];
+            Array.Copy(sourceOriginal, masterOriginalPcmBackup, sourceOriginal.Length);
+            masterOriginalSampleRate = originalFormat?.SampleRate ?? GetSelectedSampleRate();
+            hasMasterBackup = true;
+        }
+
+        private void ClearMasterSampleBackup()
+        {
+            hasMasterBackup = false;
+            masterPcmBackup = null;
+            masterOriginalPcmBackup = null;
+            masterOriginalSampleRate = 0;
+            if (btnBackToMasterSample != null)
+            {
+                btnBackToMasterSample.Enabled = false;
+            }
+        }
+
+        private void BtnBackToMasterSample_Click(object sender, EventArgs e)
+        {
+            RestoreMasterSampleBackup();
+        }
+
+        private void RestoreMasterSampleBackup()
+        {
+            if (!hasMasterBackup || masterPcmBackup == null || masterPcmBackup.Length == 0 || masterOriginalPcmBackup == null || masterOriginalPcmBackup.Length == 0)
+            {
+                MessageBox.Show("No master sample backup is available yet.", "Back to Master", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            StopPreview();
+            ClearAllState();
+
+            currentPcmData = new byte[masterPcmBackup.Length];
+            Array.Copy(masterPcmBackup, currentPcmData, masterPcmBackup.Length);
+
+            originalPcmData = new byte[masterOriginalPcmBackup.Length];
+            Array.Copy(masterOriginalPcmBackup, originalPcmData, masterOriginalPcmBackup.Length);
+
+            originalSampleRate = masterOriginalSampleRate;
+            originalFormat = new WaveFormat(masterOriginalSampleRate, 8, 1);
+            isRecorded = true;
+            lastLoadedFilePath = null;
+
+            SetSampleRateComboTextWithoutProcessing(masterOriginalSampleRate, $"{masterOriginalSampleRate}Hz - Master");
+            waveformViewer?.SetAudioData(currentPcmData);
+            waveformViewer?.Invalidate();
+            StoreInitialState();
+            btnBackToMasterSample.Enabled = false;
+            AddToListBox("Master sample restored.");
+        }
+
+        private void UpdatePadPlayingState(int slot)
+        {
+            if (samplePadForm == null || samplePadForm.IsDisposed || slot < 0 || slot >= activePadPlayCounts.Length)
+            {
+                return;
+            }
+
+            bool isPlaying = activePadPlayCounts[slot] > 0;
+            if (samplePadForm.InvokeRequired)
+            {
+                samplePadForm.BeginInvoke(new Action(() => samplePadForm.SetPadPlaying(slot, isPlaying)));
+            }
+            else
+            {
+                samplePadForm.SetPadPlaying(slot, isPlaying);
+            }
+        }
+
+        private void StopAllInteractiveAudio()
+        {
+            StopPreview();
+
+            lock (playbackLock)
+            {
+                foreach (var voice in activePadVoices.ToList())
+                {
+                    StopAndDisposePadVoice(voice);
+                }
+                activePadVoices.Clear();
+
+                for (int i = 0; i < activePadPlayCounts.Length; i++)
+                {
+                    activePadPlayCounts[i] = 0;
+                    UpdatePadPlayingState(i);
+                }
+            }
+
+            try
+            {
+                pianoWaveOut?.Stop();
+            }
+            catch
+            {
+                // Best-effort stop.
+            }
+
+            activePianoOffset = -1;
+            pianoPanel?.Invalidate();
+            AddToListBox("All playback stopped.");
         }
 
         private void ComboBoxPTNote_DrawItem(object sender, DrawItemEventArgs e)
@@ -1434,16 +1582,16 @@ namespace WavConvert4Amiga
             panelWaveform.Visible = true;
 
             // Create a flow layout panel for all buttons at the top
-            FlowLayoutPanel controlPanel = new FlowLayoutPanel();
-            controlPanel.Dock = DockStyle.Top;
-            controlPanel.Padding = new Padding(3);
-            controlPanel.WrapContents = false;
-            controlPanel.AutoSize = false;
-            controlPanel.AutoScroll = true;
-            controlPanel.Height = 30;
-            controlPanel.Margin = new Padding(0);
-            panelWaveform.Controls.Add(controlPanel);
-            InitializeEditButtons(controlPanel);
+            waveformControlPanel = new FlowLayoutPanel();
+            waveformControlPanel.Dock = DockStyle.Top;
+            waveformControlPanel.Padding = new Padding(3);
+            waveformControlPanel.WrapContents = false;
+            waveformControlPanel.AutoSize = false;
+            waveformControlPanel.AutoScroll = true;
+            waveformControlPanel.Height = 34;
+            waveformControlPanel.Margin = new Padding(0);
+            panelWaveform.Controls.Add(waveformControlPanel);
+            InitializeEditButtons(waveformControlPanel);
 
             // Common button size
             Size buttonSize = new Size(86, 22);
@@ -1453,47 +1601,66 @@ namespace WavConvert4Amiga
             btnClearWaveform.Text = "Clear";
             btnClearWaveform.Size = buttonSize;
             btnClearWaveform.Click += BtnClearWaveform_Click;
-            controlPanel.Controls.Add(btnClearWaveform);
+            waveformControlPanel.Controls.Add(btnClearWaveform);
 
             //Zoom Buttons
             btnZoomIn = new RetroButton();
             btnZoomIn.Text = "Zoom In";
             btnZoomIn.Size = buttonSize;
             btnZoomIn.Click += BtnZoomIn_Click;
-            controlPanel.Controls.Add(btnZoomIn);
+            waveformControlPanel.Controls.Add(btnZoomIn);
 
             btnZoomOut = new RetroButton();
             btnZoomOut.Text = "Zoom Out";
             btnZoomOut.Size = buttonSize;
             btnZoomOut.Click += BtnZoomOut_Click;
-            controlPanel.Controls.Add(btnZoomOut);
+            waveformControlPanel.Controls.Add(btnZoomOut);
 
             // Add Save Loop Points (8SVX) button
             Button btnSaveLoop8SVX = new RetroButton();
             btnSaveLoop8SVX.Text = "Save Loop Points (8SVX)";
             btnSaveLoop8SVX.Size = new Size(170, 22); // Wider for longer text
             btnSaveLoop8SVX.Click += BtnSaveLoop8SVX_Click;
-            controlPanel.Controls.Add(btnSaveLoop8SVX);
+            waveformControlPanel.Controls.Add(btnSaveLoop8SVX);
 
             // Add Save Loop button
             Button btnSaveLoop = new RetroButton();
             btnSaveLoop.Text = "Save Loop";
             btnSaveLoop.Size = buttonSize;
             btnSaveLoop.Click += BtnSaveLoop_Click;
-            controlPanel.Controls.Add(btnSaveLoop);
+            waveformControlPanel.Controls.Add(btnSaveLoop);
 
             Button btnSaveSample = new RetroButton();
             btnSaveSample.Text = "Save Sample";
             btnSaveSample.Size = buttonSize;
             btnSaveSample.Click += BtnSaveSample_Click;
-            controlPanel.Controls.Add(btnSaveSample);
+            waveformControlPanel.Controls.Add(btnSaveSample);
 
             // Add Preview button
             btnPreviewLoop = new RetroButton();
             btnPreviewLoop.Text = "Preview";
             btnPreviewLoop.Size = buttonSize;
             btnPreviewLoop.Click += BtnPreviewLoop_Click;
-            controlPanel.Controls.Add(btnPreviewLoop);
+            waveformControlPanel.Controls.Add(btnPreviewLoop);
+
+            btnStopAllAudio = new RetroButton();
+            btnStopAllAudio.Text = "Stop All";
+            btnStopAllAudio.Size = buttonSize;
+            btnStopAllAudio.Click += (s, e) => StopAllInteractiveAudio();
+            waveformControlPanel.Controls.Add(btnStopAllAudio);
+
+            btnPadAssign = new RetroButton();
+            btnPadAssign.Text = "PAD";
+            btnPadAssign.Size = buttonSize;
+            btnPadAssign.Click += BtnPadAssign_Click;
+            waveformControlPanel.Controls.Add(btnPadAssign);
+
+            btnBackToMasterSample = new RetroButton();
+            btnBackToMasterSample.Text = "Back to Master";
+            btnBackToMasterSample.Size = new Size(120, 22);
+            btnBackToMasterSample.Enabled = false;
+            btnBackToMasterSample.Click += BtnBackToMasterSample_Click;
+            waveformControlPanel.Controls.Add(btnBackToMasterSample);
 
             btnPadAssign = new RetroButton();
             btnPadAssign.Text = "PAD";
@@ -1519,6 +1686,12 @@ namespace WavConvert4Amiga
             {
                 waveformViewer.SetAudioData(currentPcmData);
             }
+
+            BeginInvoke(new Action(() =>
+            {
+                waveformControlPanel?.PerformLayout();
+                panelWaveform?.PerformLayout();
+            }));
         }
 
         private void BtnZoomIn_Click(object sender, EventArgs e)
@@ -1535,6 +1708,7 @@ namespace WavConvert4Amiga
         {
             // Stop any ongoing playback
             StopPreview();
+            ClearMasterSampleBackup();
 
             // Clear all state
             ClearAllState();
@@ -4008,6 +4182,7 @@ namespace WavConvert4Amiga
             SetCustomCursor("busy");
             try
             {
+                ClearMasterSampleBackup();
                 ClearAllState();
                // undoStack.Clear();
                // redoStack.Clear();
@@ -5056,6 +5231,10 @@ namespace WavConvert4Amiga
                     StopAndDisposePadVoice(voice);
                 }
                 activePadVoices.Clear();
+                for (int i = 0; i < activePadPlayCounts.Length; i++)
+                {
+                    activePadPlayCounts[i] = 0;
+                }
             }
             padAssignContextMenu?.Dispose();
             samplePadForm?.Close();
