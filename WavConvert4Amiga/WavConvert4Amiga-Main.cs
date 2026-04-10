@@ -384,6 +384,10 @@ namespace WavConvert4Amiga
                 {
                     checkBoxPianoMode.Location = new Point(checkBoxNTSC.Right + 16, row1Y + 3);
                 }
+                if (checkBoxShowPad != null)
+                {
+                    checkBoxShowPad.Location = new Point(checkBoxPianoMode.Right + 16, row1Y + 3);
+                }
 
                 int rightX = ClientSize.Width - margin;
                 Action<CheckBox, int> placeRight = (cb, y) =>
