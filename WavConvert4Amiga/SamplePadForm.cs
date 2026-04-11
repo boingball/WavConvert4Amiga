@@ -39,7 +39,7 @@ namespace WavConvert4Amiga
 
             var title = new Label
             {
-                Text = "PAD 4x4  (Left-click: Play, Right-click: Edit in main)",
+                Text = "PAD 4x4  (Left-click: Play, Right-click: Edit)",
                 AutoSize = true,
                 Location = new Point(12, 12),
                 ForeColor = Color.Black
