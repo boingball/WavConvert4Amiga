@@ -422,7 +422,7 @@ namespace WavConvert4Amiga
                 }
 
                 const int queueButtonHeight = 30;
-                const int queueButtonCount = 5;
+                const int queueButtonCount = 6;
                 int queueButtonWidth = Math.Max(130, Math.Min(180, (ClientSize.Width - (margin * 2) - (gap * (queueButtonCount - 1))) / queueButtonCount));
                 int queueButtonsLeft = margin;
 
@@ -444,6 +444,13 @@ namespace WavConvert4Amiga
 
                 btnQueueClearCompleted.Location = new Point(queueButtonsLeft, row2Y);
                 btnQueueClearCompleted.Size = new Size(queueButtonWidth, queueButtonHeight);
+                queueButtonsLeft = btnQueueClearCompleted.Right + gap;
+
+                if (btnBackToMasterSample != null)
+                {
+                    btnBackToMasterSample.Location = new Point(queueButtonsLeft, row2Y);
+                    btnBackToMasterSample.Size = new Size(queueButtonWidth, queueButtonHeight);
+                }
 
                 int waveformTop = row2Y + queueButtonHeight + 4;
                 const int listHeight = 68;
@@ -1663,10 +1670,10 @@ namespace WavConvert4Amiga
 
             btnBackToMasterSample = new RetroButton();
             btnBackToMasterSample.Text = "Back to Master";
-            btnBackToMasterSample.Size = new Size(120, 22);
+            btnBackToMasterSample.Size = new Size(145, 30);
             btnBackToMasterSample.Enabled = false;
             btnBackToMasterSample.Click += BtnBackToMasterSample_Click;
-            waveformControlPanel.Controls.Add(btnBackToMasterSample);
+            this.Controls.Add(btnBackToMasterSample);
 
             // Initialize the waveform viewer AFTER the control panel
             waveformViewer = new WaveformViewer();
