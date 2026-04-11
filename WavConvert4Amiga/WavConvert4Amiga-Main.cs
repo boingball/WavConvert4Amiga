@@ -359,7 +359,6 @@ namespace WavConvert4Amiga
                 const int margin = 16;
                 const int gap = 8;
                 int row1Y = 10;
-                int row2Y = 42;
 
                 label1.Location = new Point(margin, row1Y + 4);
                 comboBoxSampleRate.Location = new Point(label1.Right + gap, row1Y);
@@ -406,6 +405,13 @@ namespace WavConvert4Amiga
                 placeRight(checkBox16BitWAV, row1Y + 3);
                 placeRight(checkBoxShowPad, row1Y + 3);
 
+                int topRowHeight = Math.Max(
+                    comboBoxSampleRate.Height,
+                    Math.Max(
+                        (checkBoxShowPad?.Bottom ?? checkBox16BitWAV.Bottom) - row1Y,
+                        (comboBoxPTNote?.Bottom ?? comboBoxSampleRate.Bottom) - row1Y));
+                int row2Y = row1Y + topRowHeight + gap;
+
                 int leftClusterRight = checkBoxPianoMode != null ? checkBoxPianoMode.Right : checkBoxNTSC.Right;
                 if (checkBoxShowPad != null && checkBoxShowPad.Left < leftClusterRight + gap)
                 {
@@ -416,28 +422,44 @@ namespace WavConvert4Amiga
                 }
 
                 const int queueButtonHeight = 30;
-                const int queueButtonCount = 5;
-                int queueButtonWidth = Math.Max(130, Math.Min(180, (ClientSize.Width - (margin * 2) - (gap * (queueButtonCount - 1))) / queueButtonCount));
+                const int queueButtonCount = 6;
+                int availableButtonWidth = ClientSize.Width - (margin * 2);
+                int queueButtonGap = gap;
+                int queueButtonWidth = (availableButtonWidth - (queueButtonGap * (queueButtonCount - 1))) / queueButtonCount;
+                if (queueButtonWidth < 72)
+                {
+                    queueButtonGap = 4;
+                    queueButtonWidth = (availableButtonWidth - (queueButtonGap * (queueButtonCount - 1))) / queueButtonCount;
+                }
+                queueButtonWidth = Math.Max(52, queueButtonWidth);
                 int queueButtonsLeft = margin;
 
                 btnManualConvert.Location = new Point(queueButtonsLeft, row2Y);
                 btnManualConvert.Size = new Size(queueButtonWidth, queueButtonHeight);
-                queueButtonsLeft = btnManualConvert.Right + gap;
+                queueButtonsLeft = btnManualConvert.Right + queueButtonGap;
 
                 btnQueueAddFiles.Location = new Point(queueButtonsLeft, row2Y);
                 btnQueueAddFiles.Size = new Size(queueButtonWidth, queueButtonHeight);
-                queueButtonsLeft = btnQueueAddFiles.Right + gap;
+                queueButtonsLeft = btnQueueAddFiles.Right + queueButtonGap;
 
                 btnQueueStart.Location = new Point(queueButtonsLeft, row2Y);
                 btnQueueStart.Size = new Size(queueButtonWidth, queueButtonHeight);
-                queueButtonsLeft = btnQueueStart.Right + gap;
+                queueButtonsLeft = btnQueueStart.Right + queueButtonGap;
 
                 btnQueueStop.Location = new Point(queueButtonsLeft, row2Y);
                 btnQueueStop.Size = new Size(queueButtonWidth, queueButtonHeight);
-                queueButtonsLeft = btnQueueStop.Right + gap;
+                queueButtonsLeft = btnQueueStop.Right + queueButtonGap;
 
                 btnQueueClearCompleted.Location = new Point(queueButtonsLeft, row2Y);
                 btnQueueClearCompleted.Size = new Size(queueButtonWidth, queueButtonHeight);
+                queueButtonsLeft = btnQueueClearCompleted.Right + queueButtonGap;
+
+                if (btnBackToMasterSample != null)
+                {
+                    btnBackToMasterSample.Location = new Point(queueButtonsLeft, row2Y);
+                    btnBackToMasterSample.Size = new Size(queueButtonWidth, queueButtonHeight);
+                    btnBackToMasterSample.BringToFront();
+                }
 
                 int waveformTop = row2Y + queueButtonHeight + 4;
                 const int listHeight = 68;
@@ -1657,10 +1679,10 @@ namespace WavConvert4Amiga
 
             btnBackToMasterSample = new RetroButton();
             btnBackToMasterSample.Text = "Back to Master";
-            btnBackToMasterSample.Size = new Size(120, 22);
+            btnBackToMasterSample.Size = new Size(145, 30);
             btnBackToMasterSample.Enabled = false;
             btnBackToMasterSample.Click += BtnBackToMasterSample_Click;
-            waveformControlPanel.Controls.Add(btnBackToMasterSample);
+            this.Controls.Add(btnBackToMasterSample);
 
             // Initialize the waveform viewer AFTER the control panel
             waveformViewer = new WaveformViewer();
