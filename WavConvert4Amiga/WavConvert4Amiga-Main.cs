@@ -359,7 +359,6 @@ namespace WavConvert4Amiga
                 const int margin = 16;
                 const int gap = 8;
                 int row1Y = 10;
-                int row2Y = 42;
 
                 label1.Location = new Point(margin, row1Y + 4);
                 comboBoxSampleRate.Location = new Point(label1.Right + gap, row1Y);
@@ -405,6 +404,13 @@ namespace WavConvert4Amiga
                 placeRight(checkBoxEnable8SVX, row1Y + 3);
                 placeRight(checkBox16BitWAV, row1Y + 3);
                 placeRight(checkBoxShowPad, row1Y + 3);
+
+                int topRowHeight = Math.Max(
+                    comboBoxSampleRate.Height,
+                    Math.Max(
+                        (checkBoxShowPad?.Bottom ?? checkBox16BitWAV.Bottom) - row1Y,
+                        (comboBoxPTNote?.Bottom ?? comboBoxSampleRate.Bottom) - row1Y));
+                int row2Y = row1Y + topRowHeight + gap;
 
                 int leftClusterRight = checkBoxPianoMode != null ? checkBoxPianoMode.Right : checkBoxNTSC.Right;
                 if (checkBoxShowPad != null && checkBoxShowPad.Left < leftClusterRight + gap)
