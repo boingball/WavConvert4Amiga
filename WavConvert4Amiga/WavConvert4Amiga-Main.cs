@@ -423,33 +423,42 @@ namespace WavConvert4Amiga
 
                 const int queueButtonHeight = 30;
                 const int queueButtonCount = 6;
-                int queueButtonWidth = Math.Max(130, Math.Min(180, (ClientSize.Width - (margin * 2) - (gap * (queueButtonCount - 1))) / queueButtonCount));
+                int availableButtonWidth = ClientSize.Width - (margin * 2);
+                int queueButtonGap = gap;
+                int queueButtonWidth = (availableButtonWidth - (queueButtonGap * (queueButtonCount - 1))) / queueButtonCount;
+                if (queueButtonWidth < 72)
+                {
+                    queueButtonGap = 4;
+                    queueButtonWidth = (availableButtonWidth - (queueButtonGap * (queueButtonCount - 1))) / queueButtonCount;
+                }
+                queueButtonWidth = Math.Max(52, queueButtonWidth);
                 int queueButtonsLeft = margin;
 
                 btnManualConvert.Location = new Point(queueButtonsLeft, row2Y);
                 btnManualConvert.Size = new Size(queueButtonWidth, queueButtonHeight);
-                queueButtonsLeft = btnManualConvert.Right + gap;
+                queueButtonsLeft = btnManualConvert.Right + queueButtonGap;
 
                 btnQueueAddFiles.Location = new Point(queueButtonsLeft, row2Y);
                 btnQueueAddFiles.Size = new Size(queueButtonWidth, queueButtonHeight);
-                queueButtonsLeft = btnQueueAddFiles.Right + gap;
+                queueButtonsLeft = btnQueueAddFiles.Right + queueButtonGap;
 
                 btnQueueStart.Location = new Point(queueButtonsLeft, row2Y);
                 btnQueueStart.Size = new Size(queueButtonWidth, queueButtonHeight);
-                queueButtonsLeft = btnQueueStart.Right + gap;
+                queueButtonsLeft = btnQueueStart.Right + queueButtonGap;
 
                 btnQueueStop.Location = new Point(queueButtonsLeft, row2Y);
                 btnQueueStop.Size = new Size(queueButtonWidth, queueButtonHeight);
-                queueButtonsLeft = btnQueueStop.Right + gap;
+                queueButtonsLeft = btnQueueStop.Right + queueButtonGap;
 
                 btnQueueClearCompleted.Location = new Point(queueButtonsLeft, row2Y);
                 btnQueueClearCompleted.Size = new Size(queueButtonWidth, queueButtonHeight);
-                queueButtonsLeft = btnQueueClearCompleted.Right + gap;
+                queueButtonsLeft = btnQueueClearCompleted.Right + queueButtonGap;
 
                 if (btnBackToMasterSample != null)
                 {
                     btnBackToMasterSample.Location = new Point(queueButtonsLeft, row2Y);
                     btnBackToMasterSample.Size = new Size(queueButtonWidth, queueButtonHeight);
+                    btnBackToMasterSample.BringToFront();
                 }
 
                 int waveformTop = row2Y + queueButtonHeight + 4;
