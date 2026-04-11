@@ -1679,6 +1679,7 @@ namespace WavConvert4Amiga
 
             btnBackToMasterSample = new RetroButton();
             btnBackToMasterSample.Text = "Back to Master";
+            btnBackToMasterSample.Location = new Point(700, 35);
             btnBackToMasterSample.Size = new Size(145, 30);
             btnBackToMasterSample.Enabled = false;
             btnBackToMasterSample.Click += BtnBackToMasterSample_Click;
