@@ -948,7 +948,8 @@ namespace WavConvert4Amiga
                     pianoAudioStream?.Dispose();
                     pianoAudioStream = null;
 
-                    pianoAudioStream = new MemoryStream(currentPcmData, false);
+                    byte[] playbackData = CreateTailSmoothedPlaybackCopy(currentPcmData);
+                    pianoAudioStream = new MemoryStream(playbackData, false);
                     pianoWaveStream = new RawSourceWaveStream(pianoAudioStream, new WaveFormat(noteSampleRate, 8, 1));
 
                     pianoWaveOut.Init(pianoWaveStream);
@@ -1091,7 +1092,8 @@ namespace WavConvert4Amiga
                         }
                     };
 
-                    voice.AudioStream = new MemoryStream(slotInfo.AudioData, false);
+                    byte[] playbackData = CreateTailSmoothedPlaybackCopy(slotInfo.AudioData);
+                    voice.AudioStream = new MemoryStream(playbackData, false);
                     voice.WaveStream = new RawSourceWaveStream(voice.AudioStream, new WaveFormat(slotInfo.SampleRate, 8, 1));
                     voice.Output.Init(voice.WaveStream);
                     voice.Output.PlaybackStopped += (s, e) =>
@@ -1123,6 +1125,33 @@ namespace WavConvert4Amiga
             {
                 // keep pad playback resilient without interrupting editing workflow
             }
+        }
+
+        private byte[] CreateTailSmoothedPlaybackCopy(byte[] sourceData)
+        {
+            if (sourceData == null || sourceData.Length == 0)
+            {
+                return Array.Empty<byte>();
+            }
+
+            byte[] playbackData = new byte[sourceData.Length];
+            Array.Copy(sourceData, playbackData, sourceData.Length);
+
+            // 8-bit PCM in this app is unsigned, so silence is centered at 128.
+            // A very short fade-to-center at the tail avoids end-of-sample clicks.
+            const int fadeSamples = 64;
+            int fadeLength = Math.Min(fadeSamples, playbackData.Length);
+            int fadeStart = playbackData.Length - fadeLength;
+            for (int i = 0; i < fadeLength; i++)
+            {
+                int index = fadeStart + i;
+                float t = (i + 1) / (float)fadeLength;
+                float sample = playbackData[index];
+                float smoothed = sample + (128f - sample) * t;
+                playbackData[index] = (byte)Math.Round(Math.Max(0f, Math.Min(255f, smoothed)));
+            }
+
+            return playbackData;
         }
 
         private void StopAndDisposePadVoice(PadPlaybackVoice voice, bool resetPadIndicators = false)
