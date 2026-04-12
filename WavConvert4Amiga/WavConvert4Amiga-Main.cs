@@ -1005,6 +1005,8 @@ namespace WavConvert4Amiga
                 return;
             }
 
+            SaveMasterSampleBackup();
+
             byte[] copiedAudio = new byte[currentPcmData.Length];
             Array.Copy(currentPcmData, copiedAudio, currentPcmData.Length);
 
@@ -1185,7 +1187,7 @@ namespace WavConvert4Amiga
 
         private void SaveMasterSampleBackup()
         {
-            if (currentPcmData == null || currentPcmData.Length == 0)
+            if (hasMasterBackup || currentPcmData == null || currentPcmData.Length == 0)
             {
                 return;
             }
@@ -1773,6 +1775,7 @@ namespace WavConvert4Amiga
 
             // Store original length for logging
             int originalLength = currentPcmData.Length;
+            SaveMasterSampleBackup();
 
             // IMPORTANT: Store current state in undo stack BEFORE making changes
             PushUndo(currentPcmData);
@@ -1823,6 +1826,7 @@ namespace WavConvert4Amiga
 
             int originalLength = currentPcmData.Length;
             int currentSampleRate = waveformViewer?.CurrentSampleRate ?? GetSelectedSampleRate();
+            SaveMasterSampleBackup();
 
             PushUndo(currentPcmData);
             redoStack.Clear();
