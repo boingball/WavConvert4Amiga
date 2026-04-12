@@ -114,12 +114,12 @@ namespace WavConvert4Amiga
             { Keys.D5, 18 }, { Keys.T, 19 }, { Keys.D6, 20 }, { Keys.Y, 21 }, { Keys.D7, 22 }, { Keys.U, 23 }
         };
         private int activePianoOffset = -1;
-        private WaveOutEvent pianoWaveOut;
+        private IWavePlayer pianoWaveOut;
         private MemoryStream pianoAudioStream;
         private RawSourceWaveStream pianoWaveStream;
         private sealed class PadPlaybackVoice
         {
-            public WaveOutEvent Output;
+            public IWavePlayer Output;
             public MemoryStream AudioStream;
             public RawSourceWaveStream WaveStream;
         }
@@ -916,11 +916,7 @@ namespace WavConvert4Amiga
                 return;
             }
 
-            pianoWaveOut = new WaveOutEvent
-            {
-                DesiredLatency = 90,
-                NumberOfBuffers = 3
-            };
+            pianoWaveOut = new WaveOut();
             pianoWaveOut.PlaybackStopped += (s, e) =>
             {
                 activePianoOffset = -1;
@@ -1085,11 +1081,7 @@ namespace WavConvert4Amiga
                 {
                     var voice = new PadPlaybackVoice
                     {
-                        Output = new WaveOutEvent
-                        {
-                            DesiredLatency = 90,
-                            NumberOfBuffers = 3
-                        }
+                        Output = new WaveOut()
                     };
 
                     byte[] playbackData = CreateClickFreePlaybackCopy(slotInfo.AudioData, slotInfo.SampleRate);
