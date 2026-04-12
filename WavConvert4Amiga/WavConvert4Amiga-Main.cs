@@ -948,7 +948,7 @@ namespace WavConvert4Amiga
                     pianoAudioStream?.Dispose();
                     pianoAudioStream = null;
 
-                    byte[] playbackData = CreateTailSmoothedPlaybackCopy(currentPcmData);
+                    byte[] playbackData = CreateClickFreePlaybackCopy(currentPcmData, noteSampleRate);
                     pianoAudioStream = new MemoryStream(playbackData, false);
                     pianoWaveStream = new RawSourceWaveStream(pianoAudioStream, new WaveFormat(noteSampleRate, 8, 1));
 
@@ -1092,7 +1092,7 @@ namespace WavConvert4Amiga
                         }
                     };
 
-                    byte[] playbackData = CreateTailSmoothedPlaybackCopy(slotInfo.AudioData);
+                    byte[] playbackData = CreateClickFreePlaybackCopy(slotInfo.AudioData, slotInfo.SampleRate);
                     voice.AudioStream = new MemoryStream(playbackData, false);
                     voice.WaveStream = new RawSourceWaveStream(voice.AudioStream, new WaveFormat(slotInfo.SampleRate, 8, 1));
                     voice.Output.Init(voice.WaveStream);
@@ -1127,21 +1127,22 @@ namespace WavConvert4Amiga
             }
         }
 
-        private byte[] CreateTailSmoothedPlaybackCopy(byte[] sourceData)
+        private byte[] CreateClickFreePlaybackCopy(byte[] sourceData, int sampleRate)
         {
             if (sourceData == null || sourceData.Length == 0)
             {
                 return Array.Empty<byte>();
             }
 
-            byte[] playbackData = new byte[sourceData.Length];
+            int safeSampleRate = Math.Max(2000, sampleRate);
+            int tailSilenceSamples = Math.Max(64, safeSampleRate / 200); // ~5ms appended silence
+            byte[] playbackData = new byte[sourceData.Length + tailSilenceSamples];
             Array.Copy(sourceData, playbackData, sourceData.Length);
 
             // 8-bit PCM in this app is unsigned, so silence is centered at 128.
-            // A very short fade-to-center at the tail avoids end-of-sample clicks.
-            const int fadeSamples = 64;
-            int fadeLength = Math.Min(fadeSamples, playbackData.Length);
-            int fadeStart = playbackData.Length - fadeLength;
+            // Fade the original tail toward center and append a short silence cushion.
+            int fadeLength = Math.Min(Math.Max(64, safeSampleRate / 250), sourceData.Length); // ~4ms fade
+            int fadeStart = sourceData.Length - fadeLength;
             for (int i = 0; i < fadeLength; i++)
             {
                 int index = fadeStart + i;
@@ -1149,6 +1150,11 @@ namespace WavConvert4Amiga
                 float sample = playbackData[index];
                 float smoothed = sample + (128f - sample) * t;
                 playbackData[index] = (byte)Math.Round(Math.Max(0f, Math.Min(255f, smoothed)));
+            }
+
+            for (int i = sourceData.Length; i < playbackData.Length; i++)
+            {
+                playbackData[i] = 128;
             }
 
             return playbackData;
