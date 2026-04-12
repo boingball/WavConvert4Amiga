@@ -114,12 +114,12 @@ namespace WavConvert4Amiga
             { Keys.D5, 18 }, { Keys.T, 19 }, { Keys.D6, 20 }, { Keys.Y, 21 }, { Keys.D7, 22 }, { Keys.U, 23 }
         };
         private int activePianoOffset = -1;
-        private WaveOutEvent pianoWaveOut;
+        private IWavePlayer pianoWaveOut;
         private MemoryStream pianoAudioStream;
         private RawSourceWaveStream pianoWaveStream;
         private sealed class PadPlaybackVoice
         {
-            public WaveOutEvent Output;
+            public IWavePlayer Output;
             public MemoryStream AudioStream;
             public RawSourceWaveStream WaveStream;
         }
@@ -916,11 +916,7 @@ namespace WavConvert4Amiga
                 return;
             }
 
-            pianoWaveOut = new WaveOutEvent
-            {
-                DesiredLatency = 90,
-                NumberOfBuffers = 3
-            };
+            pianoWaveOut = new WaveOut();
             pianoWaveOut.PlaybackStopped += (s, e) =>
             {
                 activePianoOffset = -1;
@@ -948,7 +944,8 @@ namespace WavConvert4Amiga
                     pianoAudioStream?.Dispose();
                     pianoAudioStream = null;
 
-                    pianoAudioStream = new MemoryStream(currentPcmData, false);
+                    byte[] playbackData = CreateClickFreePlaybackCopy(currentPcmData, noteSampleRate);
+                    pianoAudioStream = new MemoryStream(playbackData, false);
                     pianoWaveStream = new RawSourceWaveStream(pianoAudioStream, new WaveFormat(noteSampleRate, 8, 1));
 
                     pianoWaveOut.Init(pianoWaveStream);
@@ -1084,14 +1081,11 @@ namespace WavConvert4Amiga
                 {
                     var voice = new PadPlaybackVoice
                     {
-                        Output = new WaveOutEvent
-                        {
-                            DesiredLatency = 90,
-                            NumberOfBuffers = 3
-                        }
+                        Output = new WaveOut()
                     };
 
-                    voice.AudioStream = new MemoryStream(slotInfo.AudioData, false);
+                    byte[] playbackData = CreateClickFreePlaybackCopy(slotInfo.AudioData, slotInfo.SampleRate);
+                    voice.AudioStream = new MemoryStream(playbackData, false);
                     voice.WaveStream = new RawSourceWaveStream(voice.AudioStream, new WaveFormat(slotInfo.SampleRate, 8, 1));
                     voice.Output.Init(voice.WaveStream);
                     voice.Output.PlaybackStopped += (s, e) =>
@@ -1123,6 +1117,39 @@ namespace WavConvert4Amiga
             {
                 // keep pad playback resilient without interrupting editing workflow
             }
+        }
+
+        private byte[] CreateClickFreePlaybackCopy(byte[] sourceData, int sampleRate)
+        {
+            if (sourceData == null || sourceData.Length == 0)
+            {
+                return Array.Empty<byte>();
+            }
+
+            int safeSampleRate = Math.Max(2000, sampleRate);
+            int tailSilenceSamples = Math.Max(64, safeSampleRate / 200); // ~5ms appended silence
+            byte[] playbackData = new byte[sourceData.Length + tailSilenceSamples];
+            Array.Copy(sourceData, playbackData, sourceData.Length);
+
+            // 8-bit PCM in this app is unsigned, so silence is centered at 128.
+            // Fade the original tail toward center and append a short silence cushion.
+            int fadeLength = Math.Min(Math.Max(64, safeSampleRate / 250), sourceData.Length); // ~4ms fade
+            int fadeStart = sourceData.Length - fadeLength;
+            for (int i = 0; i < fadeLength; i++)
+            {
+                int index = fadeStart + i;
+                float t = (i + 1) / (float)fadeLength;
+                float sample = playbackData[index];
+                float smoothed = sample + (128f - sample) * t;
+                playbackData[index] = (byte)Math.Round(Math.Max(0f, Math.Min(255f, smoothed)));
+            }
+
+            for (int i = sourceData.Length; i < playbackData.Length; i++)
+            {
+                playbackData[i] = 128;
+            }
+
+            return playbackData;
         }
 
         private void StopAndDisposePadVoice(PadPlaybackVoice voice, bool resetPadIndicators = false)
