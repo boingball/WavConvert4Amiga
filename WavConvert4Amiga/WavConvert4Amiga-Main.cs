@@ -117,11 +117,37 @@ namespace WavConvert4Amiga
         private IWavePlayer pianoWaveOut;
         private MemoryStream pianoAudioStream;
         private RawSourceWaveStream pianoWaveStream;
+        private int pianoPlaybackGeneration = 0;
         private sealed class PadPlaybackVoice
         {
             public IWavePlayer Output;
             public MemoryStream AudioStream;
             public RawSourceWaveStream WaveStream;
+        }
+        private sealed class SilenceTailWaveProvider : IWaveProvider
+        {
+            private readonly IWaveProvider source;
+            public WaveFormat WaveFormat => source.WaveFormat;
+
+            public SilenceTailWaveProvider(IWaveProvider source)
+            {
+                this.source = source;
+            }
+
+            public int Read(byte[] buffer, int offset, int count)
+            {
+                int read = source.Read(buffer, offset, count);
+                if (read < count)
+                {
+                    for (int i = offset + read; i < offset + count; i++)
+                    {
+                        buffer[i] = 128; // unsigned 8-bit PCM silence center
+                    }
+                    return count;
+                }
+
+                return read;
+            }
         }
         private readonly List<PadPlaybackVoice> activePadVoices = new List<PadPlaybackVoice>();
         private readonly int[] activePadPlayCounts = new int[16];
@@ -917,14 +943,6 @@ namespace WavConvert4Amiga
             }
 
             pianoWaveOut = new WaveOut();
-            pianoWaveOut.PlaybackStopped += (s, e) =>
-            {
-                activePianoOffset = -1;
-                if (pianoPanel != null && !pianoPanel.IsDisposed)
-                {
-                    pianoPanel.BeginInvoke(new Action(() => pianoPanel.Invalidate()));
-                }
-            };
         }
 
         private void PlayPianoSample(int noteSampleRate)
@@ -945,11 +963,28 @@ namespace WavConvert4Amiga
                     pianoAudioStream = null;
 
                     byte[] playbackData = CreateClickFreePlaybackCopy(currentPcmData, noteSampleRate);
+                    int playbackGeneration = ++pianoPlaybackGeneration;
                     pianoAudioStream = new MemoryStream(playbackData, false);
                     pianoWaveStream = new RawSourceWaveStream(pianoAudioStream, new WaveFormat(noteSampleRate, 8, 1));
 
-                    pianoWaveOut.Init(pianoWaveStream);
+                    pianoWaveOut.Init(new SilenceTailWaveProvider(pianoWaveStream));
                     pianoWaveOut.Play();
+
+                    int playbackDurationMs = (int)Math.Ceiling(playbackData.Length * 1000.0 / Math.Max(1, noteSampleRate)) + 30;
+                    Task.Run(async () =>
+                    {
+                        await Task.Delay(playbackDurationMs);
+                        if (playbackGeneration != pianoPlaybackGeneration)
+                        {
+                            return;
+                        }
+
+                        activePianoOffset = -1;
+                        if (pianoPanel != null && !pianoPanel.IsDisposed)
+                        {
+                            pianoPanel.BeginInvoke(new Action(() => pianoPanel.Invalidate()));
+                        }
+                    });
                 }
             }
             catch
@@ -1087,19 +1122,24 @@ namespace WavConvert4Amiga
                     byte[] playbackData = CreateClickFreePlaybackCopy(slotInfo.AudioData, slotInfo.SampleRate);
                     voice.AudioStream = new MemoryStream(playbackData, false);
                     voice.WaveStream = new RawSourceWaveStream(voice.AudioStream, new WaveFormat(slotInfo.SampleRate, 8, 1));
-                    voice.Output.Init(voice.WaveStream);
-                    voice.Output.PlaybackStopped += (s, e) =>
+                    voice.Output.Init(new SilenceTailWaveProvider(voice.WaveStream));
+
+                    int playbackDurationMs = (int)Math.Ceiling(playbackData.Length * 1000.0 / Math.Max(1, slotInfo.SampleRate)) + 40;
+                    Task.Run(async () =>
                     {
+                        await Task.Delay(playbackDurationMs);
                         lock (playbackLock)
                         {
-                            activePadVoices.Remove(voice);
+                            if (!activePadVoices.Remove(voice))
+                            {
+                                return;
+                            }
+
                             activePadPlayCounts[slot] = Math.Max(0, activePadPlayCounts[slot] - 1);
                         }
-                        try { voice.Output.Dispose(); } catch { }
-                        try { voice.WaveStream.Dispose(); } catch { }
-                        try { voice.AudioStream.Dispose(); } catch { }
+                        StopAndDisposePadVoice(voice);
                         UpdatePadPlayingState(slot);
-                    };
+                    });
 
                     activePadVoices.Add(voice);
                     activePadPlayCounts[slot]++;
@@ -1322,6 +1362,7 @@ namespace WavConvert4Amiga
                 // Best-effort stop.
             }
 
+            pianoPlaybackGeneration++;
             activePianoOffset = -1;
             pianoPanel?.Invalidate();
             AddToListBox("All playback stopped.");
