@@ -114,14 +114,40 @@ namespace WavConvert4Amiga
             { Keys.D5, 18 }, { Keys.T, 19 }, { Keys.D6, 20 }, { Keys.Y, 21 }, { Keys.D7, 22 }, { Keys.U, 23 }
         };
         private int activePianoOffset = -1;
-        private WaveOutEvent pianoWaveOut;
+        private IWavePlayer pianoWaveOut;
         private MemoryStream pianoAudioStream;
         private RawSourceWaveStream pianoWaveStream;
+        private int pianoPlaybackGeneration = 0;
         private sealed class PadPlaybackVoice
         {
-            public WaveOutEvent Output;
+            public IWavePlayer Output;
             public MemoryStream AudioStream;
             public RawSourceWaveStream WaveStream;
+        }
+        private sealed class SilenceTailWaveProvider : IWaveProvider
+        {
+            private readonly IWaveProvider source;
+            public WaveFormat WaveFormat => source.WaveFormat;
+
+            public SilenceTailWaveProvider(IWaveProvider source)
+            {
+                this.source = source;
+            }
+
+            public int Read(byte[] buffer, int offset, int count)
+            {
+                int read = source.Read(buffer, offset, count);
+                if (read < count)
+                {
+                    for (int i = offset + read; i < offset + count; i++)
+                    {
+                        buffer[i] = 128; // unsigned 8-bit PCM silence center
+                    }
+                    return count;
+                }
+
+                return read;
+            }
         }
         private readonly List<PadPlaybackVoice> activePadVoices = new List<PadPlaybackVoice>();
         private readonly int[] activePadPlayCounts = new int[16];
@@ -916,19 +942,7 @@ namespace WavConvert4Amiga
                 return;
             }
 
-            pianoWaveOut = new WaveOutEvent
-            {
-                DesiredLatency = 90,
-                NumberOfBuffers = 3
-            };
-            pianoWaveOut.PlaybackStopped += (s, e) =>
-            {
-                activePianoOffset = -1;
-                if (pianoPanel != null && !pianoPanel.IsDisposed)
-                {
-                    pianoPanel.BeginInvoke(new Action(() => pianoPanel.Invalidate()));
-                }
-            };
+            pianoWaveOut = new WaveOut();
         }
 
         private void PlayPianoSample(int noteSampleRate)
@@ -948,11 +962,29 @@ namespace WavConvert4Amiga
                     pianoAudioStream?.Dispose();
                     pianoAudioStream = null;
 
-                    pianoAudioStream = new MemoryStream(currentPcmData, false);
+                    byte[] playbackData = CreateClickFreePlaybackCopy(currentPcmData, noteSampleRate);
+                    int playbackGeneration = ++pianoPlaybackGeneration;
+                    pianoAudioStream = new MemoryStream(playbackData, false);
                     pianoWaveStream = new RawSourceWaveStream(pianoAudioStream, new WaveFormat(noteSampleRate, 8, 1));
 
-                    pianoWaveOut.Init(pianoWaveStream);
+                    pianoWaveOut.Init(new SilenceTailWaveProvider(pianoWaveStream));
                     pianoWaveOut.Play();
+
+                    int playbackDurationMs = (int)Math.Ceiling(playbackData.Length * 1000.0 / Math.Max(1, noteSampleRate)) + 30;
+                    Task.Run(async () =>
+                    {
+                        await Task.Delay(playbackDurationMs);
+                        if (playbackGeneration != pianoPlaybackGeneration)
+                        {
+                            return;
+                        }
+
+                        activePianoOffset = -1;
+                        if (pianoPanel != null && !pianoPanel.IsDisposed)
+                        {
+                            pianoPanel.BeginInvoke(new Action(() => pianoPanel.Invalidate()));
+                        }
+                    });
                 }
             }
             catch
@@ -1084,28 +1116,30 @@ namespace WavConvert4Amiga
                 {
                     var voice = new PadPlaybackVoice
                     {
-                        Output = new WaveOutEvent
-                        {
-                            DesiredLatency = 90,
-                            NumberOfBuffers = 3
-                        }
+                        Output = new WaveOut()
                     };
 
-                    voice.AudioStream = new MemoryStream(slotInfo.AudioData, false);
+                    byte[] playbackData = CreateClickFreePlaybackCopy(slotInfo.AudioData, slotInfo.SampleRate);
+                    voice.AudioStream = new MemoryStream(playbackData, false);
                     voice.WaveStream = new RawSourceWaveStream(voice.AudioStream, new WaveFormat(slotInfo.SampleRate, 8, 1));
-                    voice.Output.Init(voice.WaveStream);
-                    voice.Output.PlaybackStopped += (s, e) =>
+                    voice.Output.Init(new SilenceTailWaveProvider(voice.WaveStream));
+
+                    int playbackDurationMs = (int)Math.Ceiling(playbackData.Length * 1000.0 / Math.Max(1, slotInfo.SampleRate)) + 40;
+                    Task.Run(async () =>
                     {
+                        await Task.Delay(playbackDurationMs);
                         lock (playbackLock)
                         {
-                            activePadVoices.Remove(voice);
+                            if (!activePadVoices.Remove(voice))
+                            {
+                                return;
+                            }
+
                             activePadPlayCounts[slot] = Math.Max(0, activePadPlayCounts[slot] - 1);
                         }
-                        try { voice.Output.Dispose(); } catch { }
-                        try { voice.WaveStream.Dispose(); } catch { }
-                        try { voice.AudioStream.Dispose(); } catch { }
+                        StopAndDisposePadVoice(voice);
                         UpdatePadPlayingState(slot);
-                    };
+                    });
 
                     activePadVoices.Add(voice);
                     activePadPlayCounts[slot]++;
@@ -1123,6 +1157,39 @@ namespace WavConvert4Amiga
             {
                 // keep pad playback resilient without interrupting editing workflow
             }
+        }
+
+        private byte[] CreateClickFreePlaybackCopy(byte[] sourceData, int sampleRate)
+        {
+            if (sourceData == null || sourceData.Length == 0)
+            {
+                return Array.Empty<byte>();
+            }
+
+            int safeSampleRate = Math.Max(2000, sampleRate);
+            int tailSilenceSamples = Math.Max(64, safeSampleRate / 200); // ~5ms appended silence
+            byte[] playbackData = new byte[sourceData.Length + tailSilenceSamples];
+            Array.Copy(sourceData, playbackData, sourceData.Length);
+
+            // 8-bit PCM in this app is unsigned, so silence is centered at 128.
+            // Fade the original tail toward center and append a short silence cushion.
+            int fadeLength = Math.Min(Math.Max(64, safeSampleRate / 250), sourceData.Length); // ~4ms fade
+            int fadeStart = sourceData.Length - fadeLength;
+            for (int i = 0; i < fadeLength; i++)
+            {
+                int index = fadeStart + i;
+                float t = (i + 1) / (float)fadeLength;
+                float sample = playbackData[index];
+                float smoothed = sample + (128f - sample) * t;
+                playbackData[index] = (byte)Math.Round(Math.Max(0f, Math.Min(255f, smoothed)));
+            }
+
+            for (int i = sourceData.Length; i < playbackData.Length; i++)
+            {
+                playbackData[i] = 128;
+            }
+
+            return playbackData;
         }
 
         private void StopAndDisposePadVoice(PadPlaybackVoice voice, bool resetPadIndicators = false)
@@ -1295,6 +1362,7 @@ namespace WavConvert4Amiga
                 // Best-effort stop.
             }
 
+            pianoPlaybackGeneration++;
             activePianoOffset = -1;
             pianoPanel?.Invalidate();
             AddToListBox("All playback stopped.");
