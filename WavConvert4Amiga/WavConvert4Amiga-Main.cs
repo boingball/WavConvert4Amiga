@@ -1691,20 +1691,20 @@ namespace WavConvert4Amiga
             // Add Clear Button
             Button btnClearWaveform = new RetroButton();
             btnClearWaveform.Text = "Clear";
-            btnClearWaveform.Size = buttonSize;
+            btnClearWaveform.Size = new Size(buttonSize.Width - 20, buttonSize.Height);
             btnClearWaveform.Click += BtnClearWaveform_Click;
             waveformControlPanel.Controls.Add(btnClearWaveform);
 
             //Zoom Buttons
             btnZoomIn = new RetroButton();
-            btnZoomIn.Text = "Zoom In";
-            btnZoomIn.Size = buttonSize;
+            btnZoomIn.Text = "Z+";
+            btnZoomIn.Size = new Size(buttonSize.Width - 40, buttonSize.Height);
             btnZoomIn.Click += BtnZoomIn_Click;
             waveformControlPanel.Controls.Add(btnZoomIn);
 
             btnZoomOut = new RetroButton();
-            btnZoomOut.Text = "Zoom Out";
-            btnZoomOut.Size = buttonSize;
+            btnZoomOut.Text = "Z-";
+            btnZoomOut.Size = new Size(buttonSize.Width - 40, buttonSize.Height);
             btnZoomOut.Click += BtnZoomOut_Click;
             waveformControlPanel.Controls.Add(btnZoomOut);
 
@@ -1732,6 +1732,7 @@ namespace WavConvert4Amiga
             btnPreviewLoop = new RetroButton();
             btnPreviewLoop.Text = "Preview";
             btnPreviewLoop.Size = buttonSize;
+            new Size(buttonSize.Width - 20, buttonSize.Height);
             btnPreviewLoop.Click += BtnPreviewLoop_Click;
             waveformControlPanel.Controls.Add(btnPreviewLoop);
 
@@ -1743,7 +1744,7 @@ namespace WavConvert4Amiga
 
             btnPadAssign = new RetroButton();
             btnPadAssign.Text = "PAD";
-            btnPadAssign.Size = buttonSize;
+            btnPadAssign.Size = new Size(buttonSize.Width - 40, buttonSize.Height);
             btnPadAssign.Click += BtnPadAssign_Click;
             waveformControlPanel.Controls.Add(btnPadAssign);
 
@@ -2845,7 +2846,7 @@ namespace WavConvert4Amiga
 
         private void InitializeEditButtons(FlowLayoutPanel controlPanel)
         {
-            Size editButtonSize = new Size(86, 22);
+            Size editButtonSize = new Size(40, 22);
             // Cut button
             btnCut = new RetroButton();
             btnCut.Text = "Cut";
