@@ -340,8 +340,9 @@ namespace WavConvert4Amiga
         {
             previousClientSize = this.ClientSize;
             panel1.AllowDrop = true;
-            panel1.DragEnter += panel1_DragEnter;
-            panel1.DragDrop += panel1_DragDrop;
+
+            // DragEnter and DragDrop are wired in InitializeComponent. Re-attaching
+            // them here makes one dropped file enqueue twice.
 
             // Populate the ComboBox with common values
             comboBoxSampleRate.Items.Add("150Hz - BitCrushed+++");
