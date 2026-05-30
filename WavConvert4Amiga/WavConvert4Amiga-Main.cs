@@ -3011,9 +3011,23 @@ namespace WavConvert4Amiga
 
         private byte[] AmplifyAndConvert(byte[] pcmData, float amplificationFactor)
         {
+            if (pcmData == null) return null;
+
+            // Cuts and crop-to-loop are destructive edits that have already been
+            // applied to currentPcmData. Rebuilding from originalPcmData here can
+            // bring removed audio back into the waveform before amplification,
+            // so amplify the edited buffer directly in that case.
+            if (currentCutRegions.Count > 0 || cropSelectionSeconds != null)
+            {
+                return amplificationFactor == 1.0f
+                    ? pcmData
+                    : waveformProcessor.ApplyAmplification(pcmData, amplificationFactor);
+            }
+
             if (originalPcmData == null) return pcmData;
 
-            // Always start from original data and apply all current modifications
+            // With no destructive waveform edits, start from the original source
+            // data so slider changes do not compound on top of previous previews.
             int targetSampleRate = GetSelectedSampleRate();
 
             return ApplyAllModifications(
