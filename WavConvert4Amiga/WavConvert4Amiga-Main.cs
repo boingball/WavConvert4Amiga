@@ -22,7 +22,7 @@ namespace WavConvert4Amiga
 
     public partial class MainForm : Form
     {
-        private const string VERSION = "1.5";
+        private const string VERSION = "1.5a";
         [DllImport("user32.dll")]
         private static extern IntPtr LoadCursorFromFile(string lpFileName);
         private SystemAudioRecorder audioRecorder;
