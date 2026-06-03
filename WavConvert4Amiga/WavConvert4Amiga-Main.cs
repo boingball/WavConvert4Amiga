@@ -34,6 +34,7 @@ namespace WavConvert4Amiga
         private ComboBox comboBoxPTNote;
         private CheckBox checkBoxNTSC;
         private CheckBox checkBox16BitWAV;
+        private CheckBox checkBox8SVXFibDelta;
         private WaveOut waveOut;
         private WaveFormat originalFormat; // Store original format
         private MemoryStream audioStream;
@@ -82,6 +83,7 @@ namespace WavConvert4Amiga
         private ToolStripMenuItem queueToggleMoveOriginalMenuItem;
         private ToolStripMenuItem queueToggleSaveAs8SvxMenuItem;
         private ToolStripMenuItem queueToggleSaveAs16BitWavMenuItem;
+        private ToolStripMenuItem queueToggle8SvxCompressionMenuItem;
         private ToolStripMenuItem queueUseCurrentSettingsMenuItem;
         private ToolStripMenuItem queueDeleteMenuItem;
         private ToolStripMenuItem queueLoadPreviewMenuItem;
@@ -217,6 +219,7 @@ namespace WavConvert4Amiga
             StyleCheckbox(checkBoxAutoConvert);
             StyleCheckbox(checkBoxMoveOriginal);
             StyleCheckbox(checkBox16BitWAV);
+            StyleCheckbox(checkBox8SVXFibDelta);
             StyleCheckbox(checkBoxNTSC);
             StyleTrackBar();  // Now the trackbar exists when we try to style it
 
@@ -428,6 +431,7 @@ namespace WavConvert4Amiga
                 placeRight(checkBoxMoveOriginal, row1Y + 3);
                 placeRight(checkBoxAutoConvert, row1Y + 3);
                 placeRight(checkBoxLowPass, row1Y + 3);
+                placeRight(checkBox8SVXFibDelta, row1Y + 3);
                 placeRight(checkBoxEnable8SVX, row1Y + 3);
                 placeRight(checkBox16BitWAV, row1Y + 3);
                 placeRight(checkBoxShowPad, row1Y + 3);
@@ -625,6 +629,15 @@ namespace WavConvert4Amiga
         }
         private void InitializeCheckboxes()
         {
+            checkBox8SVXFibDelta = new CheckBox
+            {
+                AutoSize = true,
+                Text = "Fib Δ",
+                UseVisualStyleBackColor = true
+            };
+            checkBox8SVXFibDelta.CheckedChanged += checkBox8SVXFibDelta_CheckedChanged;
+            Controls.Add(checkBox8SVXFibDelta);
+
             // Set up initial handling of checkbox state changes
             checkBoxEnable8SVX.CheckedChanged += (s, e) =>
             {
@@ -633,6 +646,7 @@ namespace WavConvert4Amiga
                 {
                     checkBox16BitWAV.Checked = false;
                 }
+                checkBox8SVXFibDelta.Enabled = checkBoxEnable8SVX.Checked;
             };
 
             checkBox16BitWAV.CheckedChanged += (s, e) =>
@@ -643,6 +657,8 @@ namespace WavConvert4Amiga
                     checkBoxEnable8SVX.Checked = false;
                 }
             };
+
+            checkBox8SVXFibDelta.Enabled = checkBoxEnable8SVX.Checked;
         }
 
         private void SetCustomCursor(string cursorType)
@@ -1558,6 +1574,9 @@ namespace WavConvert4Amiga
             queueToggleSaveAs16BitWavMenuItem = new ToolStripMenuItem("Save as 16-bit WAV");
             queueToggleSaveAs16BitWavMenuItem.Click += QueueToggleSaveAs16BitWavMenuItem_Click;
 
+            queueToggle8SvxCompressionMenuItem = new ToolStripMenuItem("Use 8SVX Fibonacci compression");
+            queueToggle8SvxCompressionMenuItem.Click += QueueToggle8SvxCompressionMenuItem_Click;
+
             queueUseCurrentSettingsMenuItem = new ToolStripMenuItem("Use current panel settings");
             queueUseCurrentSettingsMenuItem.Click += QueueUseCurrentSettingsMenuItem_Click;
 
@@ -1575,6 +1594,7 @@ namespace WavConvert4Amiga
             queueItemContextMenu.Items.Add(queueToggleMoveOriginalMenuItem);
             queueItemContextMenu.Items.Add(queueToggleSaveAs8SvxMenuItem);
             queueItemContextMenu.Items.Add(queueToggleSaveAs16BitWavMenuItem);
+            queueItemContextMenu.Items.Add(queueToggle8SvxCompressionMenuItem);
             queueItemContextMenu.Items.Add(queueUseCurrentSettingsMenuItem);
             queueItemContextMenu.Items.Add(new ToolStripSeparator());
             queueItemContextMenu.Items.Add(queueDeleteMenuItem);
@@ -1626,6 +1646,7 @@ namespace WavConvert4Amiga
             queueToggleMoveOriginalMenuItem.Enabled = canModify;
             queueToggleSaveAs8SvxMenuItem.Enabled = canModify;
             queueToggleSaveAs16BitWavMenuItem.Enabled = canModify;
+            queueToggle8SvxCompressionMenuItem.Enabled = canModify;
             queueUseCurrentSettingsMenuItem.Enabled = canModify;
             queueDeleteMenuItem.Enabled = canModify;
 
@@ -1634,6 +1655,7 @@ namespace WavConvert4Amiga
             queueToggleMoveOriginalMenuItem.Checked = selectedItem.MoveOriginal;
             queueToggleSaveAs8SvxMenuItem.Checked = selectedItem.SaveAs8Svx;
             queueToggleSaveAs16BitWavMenuItem.Checked = selectedItem.SaveAs16BitWav;
+            queueToggle8SvxCompressionMenuItem.Checked = selectedItem.Compress8Svx;
 
             foreach (ToolStripItem subItem in queueSampleRateMenuItem.DropDownItems)
             {
@@ -2767,6 +2789,11 @@ namespace WavConvert4Amiga
                 {
                     float cutoffFrequency = targetSampleRate * 0.45f;
                     sectionToPlay = waveformProcessor.ApplyLowPassFilter(sectionToPlay, targetSampleRate, cutoffFrequency);
+                }
+
+                if (checkBox8SVXFibDelta?.Checked == true)
+                {
+                    sectionToPlay = SVXLoader.RoundTripFibonacciDelta(sectionToPlay);
                 }
 
                 audioStream = new MemoryStream(sectionToPlay);
@@ -3948,7 +3975,8 @@ namespace WavConvert4Amiga
                 AutoConvert = checkBoxAutoConvert.Checked,
                 MoveOriginal = checkBoxMoveOriginal.Checked,
                 SaveAs8Svx = checkBoxEnable8SVX.Checked,
-                SaveAs16BitWav = checkBox16BitWAV.Checked
+                SaveAs16BitWav = checkBox16BitWAV.Checked,
+                Compress8Svx = checkBox8SVXFibDelta?.Checked ?? false
             };
         }
 
@@ -4118,6 +4146,24 @@ namespace WavConvert4Amiga
             AddToListBox($"Queue: Save as 16-bit WAV {(selectedItem.SaveAs16BitWav ? "enabled" : "disabled")} for {Path.GetFileName(selectedItem.FilePath)}");
         }
 
+        private void QueueToggle8SvxCompressionMenuItem_Click(object sender, EventArgs e)
+        {
+            QueueItem selectedItem = GetSelectedQueueItem();
+            if (selectedItem == null)
+            {
+                return;
+            }
+
+            selectedItem.Compress8Svx = !selectedItem.Compress8Svx;
+            if (selectedItem.Compress8Svx)
+            {
+                selectedItem.SaveAs8Svx = true;
+                selectedItem.SaveAs16BitWav = false;
+            }
+
+            AddToListBox($"Queue: 8SVX Fibonacci compression {(selectedItem.Compress8Svx ? "enabled" : "disabled")} for {Path.GetFileName(selectedItem.FilePath)}");
+        }
+
         private void QueueUseCurrentSettingsMenuItem_Click(object sender, EventArgs e)
         {
             QueueItem selectedItem = GetSelectedQueueItem();
@@ -4137,6 +4183,7 @@ namespace WavConvert4Amiga
             selectedItem.MoveOriginal = currentSettings.MoveOriginal;
             selectedItem.SaveAs8Svx = currentSettings.SaveAs8Svx;
             selectedItem.SaveAs16BitWav = currentSettings.SaveAs16BitWav;
+            selectedItem.Compress8Svx = currentSettings.Compress8Svx;
 
             RefreshQueueItemRow(selectedItem);
             AddToListBox($"Queue: Copied current settings to {Path.GetFileName(selectedItem.FilePath)}");
@@ -4195,6 +4242,7 @@ namespace WavConvert4Amiga
             labelAmplify.Text = $"Amplify: {trackBarAmplify.Value}%";
             checkBoxEnable8SVX.Checked = item.SaveAs8Svx;
             checkBox16BitWAV.Checked = item.SaveAs16BitWav;
+            checkBox8SVXFibDelta.Checked = item.Compress8Svx;
             checkBoxMoveOriginal.Checked = item.MoveOriginal;
             checkBoxAutoConvert.Checked = item.AutoConvert;
         }
@@ -4303,6 +4351,7 @@ namespace WavConvert4Amiga
                         originalPcmData = info.AudioData;
                         originalFormat = new WaveFormat(info.SampleRate, 8, 1);
                         originalSampleRate = info.SampleRate;
+                        checkBox8SVXFibDelta.Checked = false;
                     }
                     else
                     {
@@ -4329,6 +4378,7 @@ namespace WavConvert4Amiga
                         originalPcmData = info.AudioData;
                         originalFormat = new WaveFormat(info.SampleRate, 8, 1);
                         originalSampleRate = info.SampleRate;
+                        checkBox8SVXFibDelta.Checked = info.IsFibonacciDeltaCompressed;
                     }
                 }
                 else if (extension == ".wav")
@@ -4872,18 +4922,38 @@ namespace WavConvert4Amiga
             }
         }
 
+        private void checkBox8SVXFibDelta_CheckedChanged(object sender, EventArgs e)
+        {
+            if (isPlaying && currentPcmData != null)
+            {
+                if (currentPreviewStart >= 0 && currentPreviewEnd > currentPreviewStart)
+                {
+                    StartPreview(currentPreviewStart, currentPreviewEnd);
+                }
+                else
+                {
+                    StartPreview(0, currentPcmData.Length);
+                }
+            }
+        }
+
         private void SaveAs8SVX(byte[] pcmData, string output8SVXFile, int sampleRate)
         {
             // Get loop points if set
             var (loopStart, loopEnd) = waveformViewer.GetLoopPoints();
             int loopLength = (loopEnd > loopStart) ? loopEnd - loopStart : 0;
+            bool useFibDeltaCompression = checkBox8SVXFibDelta?.Checked == true;
 
-            // Convert unsigned PCM (0-255) to signed (-128 to 127)
+            // Convert unsigned PCM (0-255) to signed (-128 to 127) for uncompressed BODY output.
             byte[] signedPcm = new byte[pcmData.Length];
             for (int i = 0; i < pcmData.Length; i++)
             {
-                signedPcm[i] = (byte)(pcmData[i] - 128);
+                signedPcm[i] = unchecked((byte)(pcmData[i] - 128));
             }
+
+            byte[] bodyData = useFibDeltaCompression
+                ? SVXLoader.CompressFibonacciDelta(pcmData)
+                : signedPcm;
 
             using (var writer = new BinaryWriter(File.Open(output8SVXFile, FileMode.Create)))
             {
@@ -4892,7 +4962,7 @@ namespace WavConvert4Amiga
                               (8 + 20) + // VHDR chunk
                               (8 + 32) + // ANNO chunk
                               (8 + 4) + // CHAN chunk
-                              (8 + signedPcm.Length + (signedPcm.Length % 2)); // BODY chunk with padding
+                              (8 + bodyData.Length + (bodyData.Length % 2)); // BODY chunk with padding
 
                 // FORM Chunk
                 writer.Write("FORM".ToCharArray());
@@ -4902,14 +4972,13 @@ namespace WavConvert4Amiga
                 // VHDR Chunk
                 writer.Write("VHDR".ToCharArray());
                 writer.Write(BitConverter.GetBytes(20).Reverse().ToArray()); // Chunk size
-                writer.Write(BitConverter.GetBytes(signedPcm.Length).Reverse().ToArray()); // OneShotHiSamples
+                writer.Write(BitConverter.GetBytes(pcmData.Length).Reverse().ToArray()); // OneShotHiSamples
                 writer.Write(BitConverter.GetBytes(loopLength).Reverse().ToArray()); // RepeatHiSamples
                 writer.Write(BitConverter.GetBytes(loopLength).Reverse().ToArray()); // SamplesPerHiCycle
-                // Convert sample rate to big-endian bytes
                 byte[] sampleRateBytes = BitConverter.GetBytes((ushort)sampleRate).Reverse().ToArray();
                 writer.Write(sampleRateBytes); // Sample rate - 2 bytes
                 writer.Write((byte)1); // Octaves
-                writer.Write((byte)0); // Compression
+                writer.Write(useFibDeltaCompression ? SVXLoader.sCmpFibDelta : (byte)0); // Compression
                 writer.Write(new byte[] { 0x00, 0x01, 0x00, 0x00 }); // Volume
 
                 // ANNO Chunk
@@ -4924,11 +4993,11 @@ namespace WavConvert4Amiga
 
                 // BODY Chunk
                 writer.Write("BODY".ToCharArray());
-                writer.Write(BitConverter.GetBytes(signedPcm.Length).Reverse().ToArray());
-                writer.Write(signedPcm);
+                writer.Write(BitConverter.GetBytes(bodyData.Length).Reverse().ToArray());
+                writer.Write(bodyData);
 
                 // Add padding byte if needed
-                if (signedPcm.Length % 2 != 0)
+                if (bodyData.Length % 2 != 0)
                 {
                     writer.Write((byte)0);
                 }

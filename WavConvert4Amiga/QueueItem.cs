@@ -27,5 +27,6 @@ namespace WavConvert4Amiga
         public bool MoveOriginal { get; set; }
         public bool SaveAs8Svx { get; set; }
         public bool SaveAs16BitWav { get; set; }
+        public bool Compress8Svx { get; set; }
     }
 }
